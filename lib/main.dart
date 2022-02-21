@@ -430,7 +430,10 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
                         },
                         onChanged: (text) async {
                           if (text.isNotEmpty) {
-                            setState(() { initializeFieldController(); });
+                            setState(() {
+                              initializeFieldController();
+                              refreshCheckboxes();
+                            });
                           }
                         },
                       ),
