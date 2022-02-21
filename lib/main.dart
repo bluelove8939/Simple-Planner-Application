@@ -217,6 +217,7 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
   void initializeFieldController() {
     if (!isInitialized) {
       scheduleCheckbox = [];
+      scheduleCheckboxValues = [];
       scheduleFields = [];
       scheduleTextController = [];
 
@@ -432,7 +433,6 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
                           if (text.isNotEmpty) {
                             setState(() {
                               initializeFieldController();
-                              refreshCheckboxes();
                             });
                           }
                         },
