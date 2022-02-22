@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+// import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:simpleplanner/appdata_manager.dart';
-import 'package:simpleplanner/language_pack.dart';
+// import 'package:simpleplanner/language_pack.dart';
 
 
 // Global schedule data
@@ -186,6 +186,12 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
     ));
     scheduleTextController.add(TextEditingController());
     scheduleFields.add(TextFormField(
+      validator: (text) {
+        if (text != null) {
+          if (text.contains(',')) { return "Schedules cannot contain ','"; }
+        }
+        return null;
+      },
       controller: scheduleTextController[index],
       decoration: InputDecoration(
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)), borderSide: BorderSide(width: 1, color: Colors.black),),
@@ -195,12 +201,19 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
       ),
       onChanged: (text) {
         int targetIndex = scheduleFields.indexOf(scheduleFields[index]);
-        if (text.isNotEmpty && targetIndex == scheduleFields.length-1) {
-          setState(() {
-            addScheduleTextField(scheduleFields.length);
-          });
-        } else if (text.isEmpty && targetIndex == scheduleFields.length-2) {
-          removeUnnessesaryFields();
+        if (text.contains(',')) {
+          scheduleTextController[targetIndex].text = scheduleTextController[targetIndex].text.replaceAll(',', '');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Schedules cannot contain ','"), duration: Duration(seconds: 1),),
+          );
+        } else {
+          if (text.isNotEmpty && targetIndex == scheduleFields.length-1) {
+            setState(() {
+              addScheduleTextField(scheduleFields.length);
+            });
+          } else if (text.isEmpty && targetIndex == scheduleFields.length-2) {
+            removeUnnessesaryFields();
+          }
         }},
     ));
   }
@@ -273,6 +286,8 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
           scheduleContents[dateTime2String(targetDate)]!.add([scheduleTextController[index].text, scheduleCheckboxValues[index]]);
         }
       }
+
+      scheduleContents[dateTime2String(targetDate)]!.sort((a, b) => a[1].compareTo(b[1]));
 
       if (scheduleContents[dateTime2String(targetDate)]!.isEmpty) {
         scheduleContents.remove(dateTime2String(targetDate));
@@ -399,7 +414,7 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
                           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)), borderSide: BorderSide(width: 1, color: Colors.black),),
                           border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)),),
                           icon: Icon(Icons.calendar_today, color: Colors.black,),
-                          labelText: "Enter Date",
+                          labelText: "Date",
                           fillColor: Colors.black,
                           floatingLabelStyle: TextStyle(color: Colors.black,),
                         ),
@@ -441,7 +456,50 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
 
                     Container(
                       margin: EdgeInsets.fromLTRB(0, 10, 0, 10), alignment: Alignment.centerLeft,
-                      child: Text( 'Schedules', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,), ),
+                      child: Row(
+                        children: [
+                          Text( 'Schedules', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,), ),
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.only(left: 50),
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton(
+                                    child: Text('<< Prev', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),),
+                                    onPressed: () {
+                                      setState(() {
+                                        isInitialized = false;
+                                        targetDate = DateTime(targetDate.year, targetDate.month, targetDate.day - 1);
+                                        dateTextController.text = dateTime2String(targetDate);
+                                        initializeFieldController();
+                                      });
+                                      },
+                                  ),
+                                ),
+
+                                Expanded(
+                                  child: Container(
+                                    width: double.infinity,
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton(
+                                      child: Text('Next >>', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),),
+                                      onPressed: () {
+                                        setState(() {
+                                          isInitialized = false;
+                                          targetDate = DateTime(targetDate.year, targetDate.month, targetDate.day + 1);
+                                          dateTextController.text = dateTime2String(targetDate);
+                                          initializeFieldController();
+                                        });
+                                        },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
 
                     Expanded(
@@ -467,7 +525,9 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
  *   Form to add new schedule
  */
 class AddTaskMode extends StatefulWidget {
-  const AddTaskMode({Key? key}) : super(key: key);
+  final int initialTaskIndex;
+
+  const AddTaskMode({Key? key, this.initialTaskIndex = -1}) : super(key: key);
 
   @override
   _AddTaskModeState createState() => _AddTaskModeState();
@@ -489,10 +549,21 @@ class _AddTaskModeState extends State<AddTaskMode> {
   void initializeTasks() {
     if (!isInitialized) {
       dirtyTaskContents = List.from(taskContents);
-      dirtyTaskContents.sort((a, b) => b[1].compareTo(a[1]),);
+      dirtyTaskContents.sort((a, b) => b[2].compareTo(a[2]),);
     }
-    startdateController.text = dateTime2String(DateTime.now());
-    duedateController.text = dateTime2String(DateTime.now());
+
+    if (widget.initialTaskIndex == -1) {
+      startdateController.text = dateTime2String(DateTime.now());
+      duedateController.text = dateTime2String(DateTime.now());
+    } else {
+      selectedIndex = dirtyTaskContents.indexOf(taskContents[widget.initialTaskIndex]);
+      isAddNewTaskMode = false;
+      tasknameController.text = dirtyTaskContents[selectedIndex][0];
+      startdateController.text = dirtyTaskContents[selectedIndex][1];
+      duedateController.text = dirtyTaskContents[selectedIndex][2];
+      isChecked = string2Bool(dirtyTaskContents[selectedIndex][3]);
+    }
+
     isInitialized = true;
     isDirty = false;
   }
@@ -517,7 +588,7 @@ class _AddTaskModeState extends State<AddTaskMode> {
     if (_formKey.currentState!.validate()) {
       setState(() {
         dirtyTaskContents.add([tasknameController.text, startdateController.text, duedateController.text, bool2String(isChecked)]);
-        dirtyTaskContents.sort((a, b) => b[1].compareTo(a[1]),);
+        dirtyTaskContents.sort((a, b) => b[2].compareTo(a[2]),);
         tasknameController.text = '';
         startdateController.text = dateTime2String(DateTime.now());
         duedateController.text = dateTime2String(DateTime.now());
@@ -532,7 +603,7 @@ class _AddTaskModeState extends State<AddTaskMode> {
     if (_formKey.currentState!.validate()) {
       setState(() {
         dirtyTaskContents[selectedIndex] = [tasknameController.text, startdateController.text, duedateController.text, bool2String(isChecked)];
-        dirtyTaskContents.sort((a, b) => b[1].compareTo(a[1]),);
+        dirtyTaskContents.sort((a, b) => b[2].compareTo(a[2]),);
         isAddNewTaskMode = true;
         tasknameController.text = '';
         startdateController.text = dateTime2String(DateTime.now());
@@ -1686,7 +1757,7 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
   void initializeRoutines() {
     if (!isInitialized) {
       dirtyRoutineContents = List.from(weeklyRoutineContents);
-      dirtyRoutineContents.sort((a, b) => a[1].compareTo(b[1]),);
+      dirtyRoutineContents.sort((a, b) => weekdays.indexOf(a[1]).compareTo(weekdays.indexOf(b[1])),);
     }
     isInitialized = true;
     isDirty = false;
@@ -2063,6 +2134,7 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
   DateTime? currentBackPressTime;
   final GlobalKey<ScaffoldState> _key = GlobalKey();
   int selectedModeIndex = 0;
+  bool dragTriggered = false;
 
   @override
   void initState() {
@@ -2098,7 +2170,7 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
 
     // Initializing Tasks
     if (taskContents.isNotEmpty) {
-      taskContents.sort((a, b) => a[1].compareTo(b[1]));
+      taskContents.sort((a, b) => a[2].compareTo(b[2]));
       for (List targetTask in taskContents) {
         Widget targetWidget = TaskWidget(duedate: targetTask[2], taskname: targetTask[0], isChecked: targetTask[3]);
         if (targetTask[2] == dateTime2String(DateTime.now())) {
@@ -2322,111 +2394,134 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: onBackPressed,
-      child: Scaffold(
-        key: _key,
-        appBar: AppBar(
-          elevation: 0.0, backgroundColor: Colors.white,
-          leading: IconButton(
-            icon: Icon(Icons.menu, color: Colors.black,),
-            onPressed: () { _key.currentState!.openDrawer(); },
-            iconSize: 30,
-          ),
-          title: Text('Simple Planner'), titleTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 20),
-        ),
+      child: GestureDetector(
+        onVerticalDragUpdate: (details) {},
+        onHorizontalDragUpdate: (details) {
+          if (dragTriggered) {
+            if (details.delta.direction > 0) {
+              if (selectedModeIndex < 2) { setState(() {
+                selectedModeIndex++;
+              }); }
+            } else {
+              if (selectedModeIndex > 0) {
+                setState(() { selectedModeIndex--; });
+              } else {
+                _key.currentState!.openDrawer();
+              }
+            }
 
-        body: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
+            dragTriggered = false;
+          }
+        },
+        onHorizontalDragStart: (details) {
+          dragTriggered = true;
+        },
+        child: Scaffold(
+          key: _key,
+          appBar: AppBar(
+            elevation: 0.0, backgroundColor: Colors.white,
+            leading: IconButton(
+              icon: Icon(Icons.menu, color: Colors.black,),
+              onPressed: () { _key.currentState!.openDrawer(); },
+              iconSize: 30,
+            ),
+            title: Text('Simple Planner'), titleTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 20),
           ),
-          child: selectedModeIndex == 0 ? generateDashboardMode() : selectedModeIndex == 1 ? generateScheduleMode() : generateTaskMode(),
-        ),
 
-        drawer: Drawer(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: <Widget>[
-              DrawerHeader(
-                child: Container(
-                  alignment: Alignment.center,
-                  child: Text('Managers & Settings', style: TextStyle(
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ), textAlign: TextAlign.center,),
+          body: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+            ),
+            child: selectedModeIndex == 0 ? generateDashboardMode() : selectedModeIndex == 1 ? generateScheduleMode() : generateTaskMode(),
+          ),
+
+          drawer: Drawer(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: <Widget>[
+                DrawerHeader(
+                  child: Container(
+                    alignment: Alignment.center,
+                    child: Text('Managers & Settings', style: TextStyle(
+                      fontSize: 25,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ), textAlign: TextAlign.center,),
+                  ),
+                  decoration: BoxDecoration(color: Colors.amber[800],),
                 ),
-                decoration: BoxDecoration(color: Colors.amber[800],),
+                ListTile(
+                  leading: Icon(Icons.calendar_today_rounded),
+                  title: Text('Schedule Manager'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    openScheduleManager(DateTime.now());
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.list_alt_rounded),
+                  title: Text('Task Manager'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    openTaskManager();
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.check),
+                  title: Text('Notification Manager'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    openNotificationManager();
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.access_time),
+                  title: Text('Monthly Routine Manager'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    openMonthlyRoutineManager();
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.access_time),
+                  title: Text('Weekly Routine Manager'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    openWeeklyRoutineManager();
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.settings),
+                  title: Text('Settings'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    openSettings();
+                  },
+                ),
+              ],
+            ),
+          ),
+          drawerEnableOpenDragGesture: false,
+
+          bottomNavigationBar: BottomNavigationBar(
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.dashboard_rounded),
+                label: 'Dashboard',
               ),
-              ListTile(
-                leading: Icon(Icons.calendar_today_rounded),
-                title: Text('Schedule Manager'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  openScheduleManager(DateTime.now());
-                },
+              BottomNavigationBarItem(
+                icon: Icon(Icons.calendar_today_rounded),
+                label: 'Schedules',
               ),
-              ListTile(
-                leading: Icon(Icons.list_alt_rounded),
-                title: Text('Task Manager'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  openTaskManager();
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.check),
-                title: Text('Notification Manager'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  openNotificationManager();
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.access_time),
-                title: Text('Monthly Routine Manager'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  openMonthlyRoutineManager();
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.access_time),
-                title: Text('Weekly Routine Manager'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  openWeeklyRoutineManager();
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.settings),
-                title: Text('Settings'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  openSettings();
-                },
+              BottomNavigationBarItem(
+                icon: Icon(Icons.list_alt_rounded),
+                label: 'Tasks',
               ),
             ],
+            elevation: 0.0, currentIndex: selectedModeIndex,
+            selectedItemColor: Colors.amber[800], backgroundColor: Colors.white,
+            onTap: (index) { setState(() { selectedModeIndex = index; }); },
           ),
-        ),
-        drawerEnableOpenDragGesture: false,
-
-        bottomNavigationBar: BottomNavigationBar(
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard_rounded),
-              label: 'Dashboard',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_today_rounded),
-              label: 'Schedules',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.list_alt_rounded),
-              label: 'Tasks',
-            ),
-          ],
-          elevation: 0.0, currentIndex: selectedModeIndex,
-          selectedItemColor: Colors.amber[800], backgroundColor: Colors.white,
-          onTap: (index) { setState(() { selectedModeIndex = index; }); },
         ),
       ),
     );
@@ -2458,14 +2553,17 @@ class _TodoListWidgetState extends State<DailyTodoListWidget> {
         ),
       ];
     } else {
+      List<List> copiedTodoList = widget.todoList.toList();
+      copiedTodoList.sort((a, b) { return a[1].compareTo(b[1]); });
+
       return List.generate(widget.todoList.length, (i) =>
           Container(
             margin: EdgeInsets.fromLTRB(15, 0, 15, 20),
             child: Text(
-              widget.todoList[i][0],
+              copiedTodoList[i][0],
               style: TextStyle(
                 fontSize: 16, fontWeight: FontWeight.w500,
-                decoration: widget.todoList[i][1] == '1' ? TextDecoration.lineThrough : TextDecoration.none,
+                decoration: copiedTodoList[i][1] == '1' ? TextDecoration.lineThrough : TextDecoration.none,
               ),
             ),
           ));
