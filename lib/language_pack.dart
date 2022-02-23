@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 
-
 class Translations {
   final Locale locale;
   Map<String, String> _sentences = {};
@@ -38,7 +37,7 @@ class TranslationsDelegate extends LocalizationsDelegate<Translations> {
   const TranslationsDelegate();
 
   @override
-  bool isSupported(Locale locale) => ['ko_KR', 'en_US'].contains(locale.languageCode);
+  bool isSupported(Locale locale) => ['ko', 'en'].contains(locale.languageCode);
 
   @override
   Future<Translations> load(Locale locale) async {

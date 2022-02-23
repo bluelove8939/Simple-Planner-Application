@@ -3,6 +3,14 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
 
+// Constants
+const Map<String, List<String>> weekdayNames = {
+  'en_US': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+  'ko_KR': ['월', '화', '수', '목', '금', '토', '일'],
+};
+String generalLocale = 'en_US';
+
+
 // Initial settings
 Map applicationSettings = {
   'backup_dirname': rootDirname() + '/Simple Planner/backups',
@@ -26,6 +34,18 @@ DateTime int2DateTime(int year, int month, int day) {
 
 String dateTime2String(DateTime targetDate) {
   return DateFormat('yyyy-MM-dd E').format(targetDate);
+}
+
+String dateTime2StringWithoutWeekday(DateTime targetDate) {
+  return DateFormat('yyyy-MM-dd').format(targetDate);
+}
+
+String addWeekday2String(String targetString) {
+  return dateTime2String(DateTime.parse(targetString));
+}
+
+String removeWeekday2String(String targetString) {
+  return targetString.substring(0, 10);
 }
 
 String dateTime2MonthDayString(DateTime targetDate) {
@@ -152,7 +172,7 @@ Future<Map<String, List<List>>> readAllScheduleFiles() async {
     for (int index = 0; index < linesplit.length; index++) {
       commasplit.add(linesplit[index].split(','));
     }
-    contents[getDateFromFilepath(targetFile.path)] = commasplit;
+    contents[addWeekday2String(getDateFromFilepath(targetFile.path))] = commasplit;
   }
 
   return contents;
@@ -168,6 +188,8 @@ Future<List<List>> readTaskFile() async {
       for (int index = 0; index < tasks.length; index++) {
         List content = tasks[index].split(',');
         if (content.isNotEmpty) {
+          content[1] = addWeekday2String(content[1]);
+          content[2] = addWeekday2String(content[2]);
           result.add(content);
         }
       }
@@ -231,6 +253,7 @@ Future<List<List>> readWeeklyRoutineFile() async {
       for (int index = 0; index < tasks.length; index++) {
         List content = tasks[index].split(',');
         if (content.isNotEmpty) {
+          content[1] = weekdayNames[generalLocale]![int.parse(content[1])];
           result.add(content);
         }
       }
@@ -246,7 +269,7 @@ Future<List<List>> readWeeklyRoutineFile() async {
 // Save functions
 void saveScheduleFile(String targetDate, List<List>? contents) async {
   try {
-    File targetFile = await scheduleFile(targetDate);
+    File targetFile = await scheduleFile(removeWeekday2String(targetDate));
     if (contents != null) {
       if (contents.isNotEmpty) {
         List<String> commajoin = [];
@@ -268,7 +291,10 @@ void saveTaskFile(List<List> contents) async {
     File targetFile = await taskFile();
     List<String> assembledContents = [];
     for (int index = 0; index < contents.length; index++) {
-      assembledContents.add(contents[index].join(','));
+      List line = contents[index].toList();
+      line[1] = removeWeekday2String(line[1]);
+      line[2] = removeWeekday2String(line[2]);
+      assembledContents.add(line.join(','));
     }
     targetFile.writeAsString(assembledContents.join('\n'));
   } catch (e) {
@@ -307,7 +333,9 @@ void saveWeeklyRoutineFile(List<List> contents) async {
     File targetFile = await weeklyRoutineFile();
     List<String> assembledContents = [];
     for (int index = 0; index < contents.length; index++) {
-      assembledContents.add(contents[index].join(','));
+      List line = contents[index].toList();
+      line[1] = weekdayNames[generalLocale]!.indexOf(line[1]);
+      assembledContents.add(line.join(','));
     }
     targetFile.writeAsString(assembledContents.join('\n'));
   } catch (e) {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-// import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:dotted_border/dotted_border.dart';
 import 'package:simpleplanner/appdata_manager.dart';
-// import 'package:simpleplanner/language_pack.dart';
 
 
 // Global schedule data
@@ -21,7 +20,7 @@ List<List> notificationContents = [];
 DateTime addScheduleInitialDate = DateTime.now();
 
 // Constants
-const List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+List<String> weekdays = weekdayNames['en_US']!;
 List<String> monthdays = [for (int i = 1; i < 32; i++) i.toString()];
 List<String> months = [for (int i = 1; i < 13; i++) i.toString()];
 
@@ -39,6 +38,7 @@ void saveAllFiles() {
 
 
 void main() async {
+  print('main called');
   WidgetsFlutterBinding.ensureInitialized();
   scheduleContents = await readAllScheduleFiles();
   taskContents = await readTaskFile();
@@ -57,32 +57,6 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: DailyScheduleMode(),
-      // supportedLocales: const [
-      //   Locale('en', 'US'),
-      //   Locale('ko', 'KR')
-      // ],
-      // localizationsDelegates: const [
-      //   TranslationsDelegate(),
-      //   GlobalMaterialLocalizations.delegate,
-      //   GlobalWidgetsLocalizations.delegate
-      // ],
-      // localeResolutionCallback: (Locale? locale, Iterable<Locale> supportedLocales) {
-      //   if (locale == null) {
-      //     debugPrint("*language locale is null!!!");
-      //     return supportedLocales.first;
-      //   }
-      //
-      //   for (Locale supportedLocale in supportedLocales) {
-      //     if (supportedLocale.languageCode == locale.languageCode ||
-      //         supportedLocale.countryCode == locale.countryCode) {
-      //       debugPrint("*language ok $supportedLocale");
-      //       return supportedLocale;
-      //     }
-      //   }
-      //
-      //   debugPrint("*language to fallback ${supportedLocales.first}");
-      //   return supportedLocales.first;
-      // },
     );
   }
 }
@@ -109,6 +83,7 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
   TextEditingController dateTextController = TextEditingController();
   bool isInitialized = false;
   bool isBackKeyActivated = true;
+  bool dragTriggered = false;
 
   void reconfigureFields() {
     List dirtyScheduleTexts = [];
@@ -266,7 +241,7 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
         child: Row(
           children: [
             Expanded(
-              child: scheduleFields[i],
+              child: Container(margin: EdgeInsets.only(top: 5),child: scheduleFields[i]),
             ),
             scheduleCheckbox[i],
           ],
@@ -371,6 +346,31 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
         else { return false; }},
       child: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
+        onVerticalDragUpdate: (details) {},
+        onHorizontalDragUpdate: (details) {
+          if (dragTriggered) {
+            if (details.delta.direction > 0) {
+              setState(()  {
+                isInitialized = false;
+                targetDate = DateTime(targetDate.year, targetDate.month, targetDate.day + 1);
+                dateTextController.text = dateTime2String(targetDate);
+                initializeFieldController();
+              });
+            } else {
+              setState(() {
+                isInitialized = false;
+                targetDate = DateTime(targetDate.year, targetDate.month, targetDate.day - 1);
+                dateTextController.text = dateTime2String(targetDate);
+                initializeFieldController();
+              });
+            }
+
+            dragTriggered = false;
+          }
+        },
+        onHorizontalDragStart: (details) {
+          dragTriggered = true;
+        },
         child: Scaffold(
           appBar: AppBar(
             actions: <Widget>[
@@ -455,44 +455,44 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
                     ),
 
                     Container(
-                      margin: EdgeInsets.fromLTRB(0, 10, 0, 10), alignment: Alignment.centerLeft,
+                      margin: EdgeInsets.fromLTRB(0, 0, 0, 5), alignment: Alignment.centerLeft,
                       child: Row(
                         children: [
                           Text( 'Schedules', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,), ),
                           Expanded(
                             child: Row(
                               children: [
-                                Container(
-                                  padding: EdgeInsets.only(left: 50),
-                                  alignment: Alignment.centerLeft,
-                                  child: TextButton(
-                                    child: Text('<< Prev', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),),
-                                    onPressed: () {
-                                      setState(() {
-                                        isInitialized = false;
-                                        targetDate = DateTime(targetDate.year, targetDate.month, targetDate.day - 1);
-                                        dateTextController.text = dateTime2String(targetDate);
-                                        initializeFieldController();
-                                      });
-                                      },
-                                  ),
-                                ),
-
                                 Expanded(
                                   child: Container(
                                     width: double.infinity,
+                                    padding: EdgeInsets.only(right: 15),
                                     alignment: Alignment.centerRight,
                                     child: TextButton(
-                                      child: Text('Next >>', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),),
+                                      child: Text('<<  Prev', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),),
                                       onPressed: () {
                                         setState(() {
                                           isInitialized = false;
-                                          targetDate = DateTime(targetDate.year, targetDate.month, targetDate.day + 1);
+                                          targetDate = DateTime(targetDate.year, targetDate.month, targetDate.day - 1);
                                           dateTextController.text = dateTime2String(targetDate);
                                           initializeFieldController();
                                         });
                                         },
                                     ),
+                                  ),
+                                ),
+
+                                Container(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    child: Text('Next  >>', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),),
+                                    onPressed: () {
+                                      setState(() {
+                                        isInitialized = false;
+                                        targetDate = DateTime(targetDate.year, targetDate.month, targetDate.day + 1);
+                                        dateTextController.text = dateTime2String(targetDate);
+                                        initializeFieldController();
+                                      });
+                                      },
                                   ),
                                 ),
                               ],
@@ -550,6 +550,7 @@ class _AddTaskModeState extends State<AddTaskMode> {
     if (!isInitialized) {
       dirtyTaskContents = List.from(taskContents);
       dirtyTaskContents.sort((a, b) => b[2].compareTo(a[2]),);
+      dirtyTaskContents.sort((a, b) => a[3].compareTo(b[3]),);
     }
 
     if (widget.initialTaskIndex == -1) {
@@ -589,6 +590,7 @@ class _AddTaskModeState extends State<AddTaskMode> {
       setState(() {
         dirtyTaskContents.add([tasknameController.text, startdateController.text, duedateController.text, bool2String(isChecked)]);
         dirtyTaskContents.sort((a, b) => b[2].compareTo(a[2]),);
+        dirtyTaskContents.sort((a, b) => a[3].compareTo(b[3]),);
         tasknameController.text = '';
         startdateController.text = dateTime2String(DateTime.now());
         duedateController.text = dateTime2String(DateTime.now());
@@ -604,6 +606,7 @@ class _AddTaskModeState extends State<AddTaskMode> {
       setState(() {
         dirtyTaskContents[selectedIndex] = [tasknameController.text, startdateController.text, duedateController.text, bool2String(isChecked)];
         dirtyTaskContents.sort((a, b) => b[2].compareTo(a[2]),);
+        dirtyTaskContents.sort((a, b) => a[3].compareTo(b[3]),);
         isAddNewTaskMode = true;
         tasknameController.text = '';
         startdateController.text = dateTime2String(DateTime.now());
@@ -1997,7 +2000,7 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
                     width: double.infinity,
                     height: double.infinity,
                     alignment: Alignment.center,
-                    child: Text('Add new tasks', style: TextStyle(
+                    child: Text('Add new routines', style: TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey,
                     ),),
                   ) : ListView.builder(
@@ -2135,6 +2138,7 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
   final GlobalKey<ScaffoldState> _key = GlobalKey();
   int selectedModeIndex = 0;
   bool dragTriggered = false;
+  PageController bodyPageController = PageController(initialPage: 0);
 
   @override
   void initState() {
@@ -2171,6 +2175,7 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
     // Initializing Tasks
     if (taskContents.isNotEmpty) {
       taskContents.sort((a, b) => a[2].compareTo(b[2]));
+      taskContents.sort((a, b) => a[3].compareTo(b[3]),);
       for (List targetTask in taskContents) {
         Widget targetWidget = TaskWidget(duedate: targetTask[2], taskname: targetTask[0], isChecked: targetTask[3]);
         if (targetTask[2] == dateTime2String(DateTime.now())) {
@@ -2227,16 +2232,46 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
     return Future.value(true);
   }
 
-  Widget generateScheduleMode() {
-    return schedules.isEmpty ? GestureDetector(
-      onTap: () => { openScheduleManager(DateTime.now()) },
-      child: Container(
-        alignment: Alignment.center,
-        child: Text('Add new schedules', style: TextStyle(
-          fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey,
-        ),),
+  Widget addTodayScheduleButton({height = 200}) => Container(
+    width: double.infinity, height: height.toDouble(),
+    padding: EdgeInsets.all(10),
+    child: GestureDetector(
+      onTap: () { openScheduleManager(DateTime.now()); },
+      child: DottedBorder(
+        color: Colors.grey,
+        borderType: BorderType.RRect,
+        radius: Radius.circular(10),
+        child: Container(
+          alignment: Alignment.center,
+          child: Text("Add new schedules", style: TextStyle(
+            fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey,
+          ),),
+        ),
       ),
-    ) : Container(
+    ),
+  );
+
+  Widget addTaskButton({height = 100}) => GestureDetector(
+    onTap: () { openTaskManager(); },
+    child: Container(
+      padding: EdgeInsets.all(10),
+      child: DottedBorder(
+        color: Colors.grey,
+        borderType: BorderType.RRect,
+        radius: Radius.circular(10),
+        child: Container(
+          alignment: Alignment.center,
+          width: double.infinity, height: height.toDouble(),
+          child: Text("Add new tasks", style: TextStyle(
+            fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey,
+          ),),
+        ),
+      ),
+    ),
+  );
+
+  Widget generateScheduleMode() {
+    return schedules.isEmpty ? addTodayScheduleButton(height: double.infinity) : Container(
       width: double.infinity, height: double.infinity, margin: EdgeInsets.all(5),
       decoration: BoxDecoration( color: Colors.white70 ),
       child: ListView.builder(
@@ -2252,15 +2287,7 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
   }
 
   Widget generateTaskMode() {
-    return tasks.isEmpty ? GestureDetector(
-      onTap: () => { openTaskManager() },
-      child: Container(
-        alignment: Alignment.center,
-        child: Text('Add new tasks', style: TextStyle(
-          fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey,
-        ),),
-      ),
-    ) : Container(
+    return tasks.isEmpty ? addTaskButton(height: double.infinity) : Container(
       width: double.infinity, height: double.infinity, margin: EdgeInsets.all(5),
       decoration: BoxDecoration( color: Colors.white70 ),
       child: ListView.builder(
@@ -2283,6 +2310,8 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
     if (scheduleContents.keys.contains(now)) {
       List<List> targetSchedules = scheduleContents[now]!.toList();
       dashboardWidgets.add(DailyTodoListWidget(dateScheduled: now, todoList: targetSchedules,));
+    } else {
+      dashboardWidgets.add( addTodayScheduleButton() );
     }
 
     // Generate routine widget
@@ -2324,23 +2353,11 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
     // Generate tasks widget
     dashboardWidgets = dashboardWidgets + validTasks;
 
-    if (scheduleContents.keys.contains(now) && tasks.isEmpty) {
-      dashboardWidgets.add(IconButton(
-        icon: Icon(Icons.add, color: Colors.black,),
-        onPressed: openTaskManager,
-        iconSize: 25,
-      ));
+    if (validTasks.isEmpty) {
+      dashboardWidgets.add( addTaskButton() );
     }
 
-    return dashboardWidgets.isEmpty ? GestureDetector(
-      onTap: () => { openScheduleManager(DateTime.now()) },
-      child: Container(
-        alignment: Alignment.center,
-        child: Text("Add new schedules for today", style: TextStyle(
-          fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey,
-        ),),
-      ),
-    ) : Container(
+    return Container(
       width: double.infinity, height: double.infinity, margin: EdgeInsets.all(5),
       decoration: BoxDecoration( color: Colors.white70 ),
       child: ListView.builder(
@@ -2394,29 +2411,7 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: onBackPressed,
-      child: GestureDetector(
-        onVerticalDragUpdate: (details) {},
-        onHorizontalDragUpdate: (details) {
-          if (dragTriggered) {
-            if (details.delta.direction > 0) {
-              if (selectedModeIndex < 2) { setState(() {
-                selectedModeIndex++;
-              }); }
-            } else {
-              if (selectedModeIndex > 0) {
-                setState(() { selectedModeIndex--; });
-              } else {
-                _key.currentState!.openDrawer();
-              }
-            }
-
-            dragTriggered = false;
-          }
-        },
-        onHorizontalDragStart: (details) {
-          dragTriggered = true;
-        },
-        child: Scaffold(
+      child: Scaffold(
           key: _key,
           appBar: AppBar(
             elevation: 0.0, backgroundColor: Colors.white,
@@ -2432,7 +2427,21 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
             decoration: BoxDecoration(
               color: Colors.white,
             ),
-            child: selectedModeIndex == 0 ? generateDashboardMode() : selectedModeIndex == 1 ? generateScheduleMode() : generateTaskMode(),
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: ColorScheme.fromSwatch().copyWith(secondary: Colors.white),
+              ),
+              child: PageView(
+                physics: ClampingScrollPhysics(),
+                controller: bodyPageController,
+                onPageChanged: (index) { setState(() { selectedModeIndex = index; }); },
+                children: [
+                  generateDashboardMode(),
+                  generateScheduleMode(),
+                  generateTaskMode(),
+                ],
+              ),
+            ),
           ),
 
           drawer: Drawer(
@@ -2520,10 +2529,15 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
             ],
             elevation: 0.0, currentIndex: selectedModeIndex,
             selectedItemColor: Colors.amber[800], backgroundColor: Colors.white,
-            onTap: (index) { setState(() { selectedModeIndex = index; }); },
+            onTap: (index) { setState(() {
+              selectedModeIndex = index;
+              bodyPageController.animateToPage(
+                selectedModeIndex,
+                duration: Duration(milliseconds: 400),
+                curve: Curves.ease,);
+            }); },
           ),
         ),
-      ),
     );
   }
 }
