@@ -5,13 +5,8 @@
   "bottom_menu_dashboard": "대시보드",
   "bottom_menu_schedules": "일정",
   "bottom_menu_tasks": "작업",
-  "side_menu_title": "매니저와 설정",
-  "side_menu_schedule_manager": "일정 매니저",
-  "side_menu_task_manager": "알림 매니저",
-  "side_menu_notification_manager": "연간 루틴 매니저",
-  "side_menu_monthly_routine_manager": "월간 루틴 매니저",
-  "side_menu_weekly_routine_manager": "주간 루틴 매니저",
-  "side_menu_settings": "설정",
+  "side_menu_title": "매니저 & 설정",
+  "exit_msg": "뒤로가기 버튼을 한번 더 누르시면 종료됩니다",
 
   "savecheck_title": "내용 저장하기",
   "savecheck_msg": "컨텐츠가 수정 되었습니다. 수정된 내용을 저장하시겠습니까?",
@@ -22,8 +17,12 @@
   "schedule_manager_subtitle": "일정",
   "schedule_manager_updated_msg": "일정이 저장되었습니다",
   "schedule_manager_empty_msg": "일정을 추가하세요",
+  "schedule_manager_name_validation_comma": "일정은 쉽표를 포함할 수 없습니다.",
   "schedule_manager_duedate_label": "날짜",
   "schedule_manager_duedate_validation_empty": "일정에 대한 날짜를 입력하세요.",
+  "schedule_manager_index_prefix": "일정",
+  "schedule_manager_previous": "이전",
+  "schedule_manager_next": "다음",
 
   "task_manager_title": "작업 매니저",
   "task_manager_subtitle": "저장된 작업",
@@ -34,8 +33,10 @@
   "task_manager_name_validation_comma": "작업 이름은 쉽표를 포함할 수 없습니다.",
   "task_manager_startdate_label": "시작일",
   "task_manager_startdate_validation_empty": "작업에 대한 시작일을 입력하세요.",
+  "task_manager_startdate_validation_after": "시작일은 종료일보다 빨라야 합니다.",
   "task_manager_duedate_label": "종료일",
   "task_manager_duedate_validation_empty": "작업에 대한 종료일을 입력하세요.",
+  "task_manager_duedate_validation_after": "종료일은 시작일보다 늦어야 합니다.",
 
   "notification_manager_title": "알림 매니저",
   "notification_manager_subtitle": "저장된 알림",
@@ -63,11 +64,32 @@
   "weekly_routine_manager_name_validation_empty": "루틴에 대한 이름을 입력하세요.",
   "weekly_routine_manager_name_validation_comma": "루틴 이름은 쉼표를 포함할 수 없습니다.",
 
+  "settings_title": "설정",
+  "settings_language": "언어",
+
   "expression_monday": "월",
   "expression_tuesday": "화",
   "expression_wednesday": "수",
   "expression_thursday": "목",
   "expression_friday": "금",
   "expression_saturday": "토",
-  "expression_sunday": "일"
+  "expression_sunday": "일",
+
+  "dashboard_widget_notification_title": "알림",
+  "dashboard_widget_routines_title": "루틴",
+
+  "english": "영어",
+  "korean": "한국어",
+
+  "monthly": "월간",
+  "weekly": "주간",
+  "end_of_month": "월말",
+
+  "every": "매월",
+  "radix1": "일",
+  "radix2": "일",
+  "radix3": "일",
+  "radix4": "일",
+
+  "rebuild_language_pack_msg": "새로운 언어를 적용하기 위해서는 어플리케이션을 재시작하세요"
 }

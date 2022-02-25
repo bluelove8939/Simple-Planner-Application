@@ -6,12 +6,7 @@
   "bottom_menu_schedules": "Schedules",
   "bottom_menu_tasks": "tasks",
   "side_menu_title": "Managers & Settings",
-  "side_menu_schedule_manager": "Schedule Manager",
-  "side_menu_task_manager": "Task Manager",
-  "side_menu_notification_manager": "Notification Manager",
-  "side_menu_monthly_routine_manager": "Monthly Routine Manager",
-  "side_menu_weekly_routine_manager": "Weekly Routine Manager",
-  "side_menu_settings": "Settings",
+  "exit_msg": "Press back again to exit",
 
   "savecheck_title": "Save the change",
   "savecheck_msg": "Contents has been changed. Do you want to save the change?",
@@ -22,8 +17,12 @@
   "schedule_manager_subtitle": "Schedules",
   "schedule_manager_updated_msg": "Schedules updated",
   "schedule_manager_empty_msg": "Add new schedules",
+  "schedule_manager_name_validation_comma": "Name of the schedule cannot contain ','",
   "schedule_manager_duedate_label": "Schedule date",
   "schedule_manager_duedate_validation_empty": "Enter the date of your schedules",
+  "schedule_manager_index_prefix": "Schedule",
+  "schedule_manager_previous": "Prev",
+  "schedule_manager_next": "Next",
 
   "task_manager_title": "Task Manager",
   "task_manager_subtitle": "Current tasks",
@@ -34,8 +33,10 @@
   "task_manager_name_validation_comma": "Name of the task cannot contain ','",
   "task_manager_startdate_label": "Start date",
   "task_manager_startdate_validation_empty": "Enter the start date of your task",
+  "task_manager_startdate_validation_after": "Start date needs to be before the due date",
   "task_manager_duedate_label": "Due date",
   "task_manager_duedate_validation_empty": "Enter the due date of your task",
+  "task_manager_duedate_validation_after": "Duedate needs to be after the start date",
 
   "notification_manager_title": "Notification Manager",
   "notification_manager_subtitle": "Notifications",
@@ -63,11 +64,32 @@
   "weekly_routine_manager_name_validation_empty": "Enter the name of your routine",
   "weekly_routine_manager_name_validation_comma": "Name of the routine cannot contain ','",
 
+  "settings_title": "Settings",
+  "settings_language": "Languages",
+
   "expression_monday": "Mon",
   "expression_tuesday": "Tue",
   "expression_wednesday": "Wed",
   "expression_thursday": "Thu",
   "expression_friday": "Fri",
   "expression_saturday": "Sat",
-  "expression_sunday": "Sun"
+  "expression_sunday": "Sun",
+
+  "dashboard_widget_notification_title": "Notifications",
+  "dashboard_widget_routines_title": "Routines",
+
+  "english": "english",
+  "korean": "korean",
+
+  "monthly": "monthly",
+  "weekly": "weekly",
+  "end_of_month": "end of month",
+
+  "every": "every",
+  "radix1": "st",
+  "radix2": "nd",
+  "radix3": "rd",
+  "radix4": "th",
+
+  "rebuild_language_pack_msg": "Restart applicaiton to load new language pack"
 }

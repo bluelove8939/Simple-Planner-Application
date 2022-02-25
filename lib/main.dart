@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:simpleplanner/appdata_manager.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 
 // Global schedule data
@@ -20,9 +21,10 @@ List<List> notificationContents = [];
 DateTime addScheduleInitialDate = DateTime.now();
 
 // Constants
-List<String> weekdays = weekdayNames['en_US']!;
+List<String> weekdays = weekdayNames[applicationSettings['generalLocale']]!;
 List<String> monthdays = [for (int i = 1; i < 32; i++) i.toString()];
 List<String> months = [for (int i = 1; i < 13; i++) i.toString()];
+Map languagePack = {};
 
 // Functions that saves all files
 void saveAllFiles() {
@@ -34,17 +36,21 @@ void saveAllFiles() {
   saveMonthlyRoutineFile(monthlyRoutineContents);
   saveWeeklyRoutineFile(weeklyRoutineContents);
   saveNotificationFile(notificationContents);
+  saveSettingFile(applicationSettings);
 }
 
 
 void main() async {
-  print('main called');
   WidgetsFlutterBinding.ensureInitialized();
+  applicationSettings = await readSettingFile();
   scheduleContents = await readAllScheduleFiles();
   taskContents = await readTaskFile();
   notificationContents = await readNotificationFile();
   monthlyRoutineContents = await readMonthlyRoutineFile();
   weeklyRoutineContents = await readWeeklyRoutineFile();
+  languagePack = await readLanguagePackFile(applicationSettings['generalLocale'] ?? defaultApplicationSettings['generalLocale']!);
+
+  print('===== $weeklyRoutineContents');
 
   runApp(const MyApp());
 }
@@ -56,6 +62,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      supportedLocales: const [
+        Locale('en', 'US'),
+        Locale('ko', 'KR'),
+      ],
       home: DailyScheduleMode(),
     );
   }
@@ -163,7 +174,7 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
     scheduleFields.add(TextFormField(
       validator: (text) {
         if (text != null) {
-          if (text.contains(',')) { return "Schedules cannot contain ','"; }
+          if (text.contains(',')) { return languagePack['schedule_manager_name_validation_comma']; }
         }
         return null;
       },
@@ -172,14 +183,14 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)), borderSide: BorderSide(width: 1, color: Colors.black),),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)), borderSide: BorderSide(width: 1, color: Colors.black),),
         border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)),),
-        labelText: "Schedule ${index+1}", fillColor: Colors.black, floatingLabelStyle: TextStyle(color: Colors.black,),
+        labelText: "${languagePack['schedule_manager_index_prefix']!} ${index+1}", fillColor: Colors.black, floatingLabelStyle: TextStyle(color: Colors.black,),
       ),
       onChanged: (text) {
         int targetIndex = scheduleFields.indexOf(scheduleFields[index]);
         if (text.contains(',')) {
           scheduleTextController[targetIndex].text = scheduleTextController[targetIndex].text.replaceAll(',', '');
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Schedules cannot contain ','"), duration: Duration(seconds: 1),),
+            SnackBar(content: Text(languagePack['schedule_manager_name_validation_comma']), duration: Duration(seconds: 1),),
           );
         } else {
           if (text.isNotEmpty && targetIndex == scheduleFields.length-1) {
@@ -209,14 +220,16 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
       scheduleFields = [];
       scheduleTextController = [];
 
+      String convertedTargetDate = dateTime2StringWithoutWeekday(targetDate);
+
       // Initialize text fields
-      if (scheduleContents[dateTime2String(targetDate)] != null) {
-        for (int index = 0; index < scheduleContents[dateTime2String(targetDate)]!.length; index++) {
+      if (scheduleContents[convertedTargetDate] != null) {
+        for (int index = 0; index < scheduleContents[convertedTargetDate]!.length; index++) {
           if (index >= scheduleFields.length) {
-            addScheduleTextField(index, isChecked: scheduleContents[dateTime2String(targetDate)]![index][1]);
+            addScheduleTextField(index, isChecked: scheduleContents[convertedTargetDate]![index][1]);
           }
           if (!isInitialized) {
-            scheduleTextController[index].text = scheduleContents[dateTime2String(targetDate)]![index][0];
+            scheduleTextController[index].text = scheduleContents[convertedTargetDate]![index][0];
           }
         }
       }
@@ -254,24 +267,26 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
     if (_formKey.currentState!.validate()) {
       FocusScope.of(context).unfocus();
 
-      scheduleContents[dateTime2String(targetDate)] = [];
+      String convertedTargetDate = dateTime2StringWithoutWeekday(targetDate);
+
+      scheduleContents[convertedTargetDate] = [];
       List<String>.generate(scheduleTextController.length, (int i) => scheduleTextController[i].text);
       for (int index = 0; index < scheduleTextController.length; index++) {
         if (scheduleTextController[index].text.isNotEmpty) {
-          scheduleContents[dateTime2String(targetDate)]!.add([scheduleTextController[index].text, scheduleCheckboxValues[index]]);
+          scheduleContents[convertedTargetDate]!.add([scheduleTextController[index].text, scheduleCheckboxValues[index]]);
         }
       }
 
-      scheduleContents[dateTime2String(targetDate)]!.sort((a, b) => a[1].compareTo(b[1]));
+      scheduleContents[convertedTargetDate]!.sort((a, b) => a[1].compareTo(b[1]));
 
-      if (scheduleContents[dateTime2String(targetDate)]!.isEmpty) {
-        scheduleContents.remove(dateTime2String(targetDate));
+      if (scheduleContents[convertedTargetDate]!.isEmpty) {
+        scheduleContents.remove(convertedTargetDate);
       }
 
-      dirtySchedules.add(dateTime2String(targetDate));
+      dirtySchedules.add(convertedTargetDate);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Schedules updated'), duration: Duration(seconds: 1),),
+        SnackBar(content: Text(languagePack['schedule_manager_updated_msg']), duration: Duration(seconds: 1),),
       );
 
       saveAllFiles();
@@ -284,7 +299,8 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
 
       // Checks if the current content is dirty
       bool isDirty = false;
-      List? savedSchedules = scheduleContents[dateTextController.text];
+      String convertedTargetDate = dateTime2StringWithoutWeekday(targetDate);
+      List? savedSchedules = scheduleContents[convertedTargetDate];
 
       if (savedSchedules == null) {
         if (scheduleTextController.length > 1) {isDirty = true;}
@@ -303,18 +319,18 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
           barrierDismissible: false,
           builder: (context) {
             return AlertDialog(
-              title: Text('Save the contents'),
-              content: Text('Schedules has been changed. Do you want to save the change?'),
+              title: Text(languagePack['savecheck_title']),
+              content: Text(languagePack['savecheck_msg']),
               actions: [
                 TextButton(
-                  child: Text("Yes", style: TextStyle(color: Colors.amber[800]),), onPressed: () {
+                  child: Text(languagePack['savecheck_yes'], style: TextStyle(color: Colors.amber[800]),), onPressed: () {
                     saveNewSchedules();
                     Navigator.pop(context);
                     Navigator.pop(context);
                   },
                 ),
                 TextButton(
-                  child: Text("No", style: TextStyle(color: Colors.black),), onPressed: () {
+                  child: Text(languagePack['savecheck_no'], style: TextStyle(color: Colors.black),), onPressed: () {
                     Navigator.pop(context);
                     Navigator.pop(context);
                   },
@@ -387,7 +403,7 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
               onPressed: backKeyPressed,
               iconSize: 30,
             ),
-            title: Text('Schedule Manager'),
+            title: Text(languagePack['schedule_manager_title']),
             titleTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 20,),
           ),
 
@@ -404,7 +420,7 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
                       child: TextFormField(
                         validator: (text) {
                           if (text != null) {
-                            if (text.isEmpty) { return 'Enter the date of your schedules'; }
+                            if (text.isEmpty) { return languagePack['schedule_manager_duedate_validation_empty']; }
                           }
                           return null;
                         },
@@ -414,13 +430,14 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
                           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)), borderSide: BorderSide(width: 1, color: Colors.black),),
                           border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)),),
                           icon: Icon(Icons.calendar_today, color: Colors.black,),
-                          labelText: "Date",
+                          labelText: languagePack["schedule_manager_duedate_label"],
                           fillColor: Colors.black,
                           floatingLabelStyle: TextStyle(color: Colors.black,),
                         ),
                         readOnly: true,
                         onTap: () async {
                           DateTime? pickedDate = await showDatePicker(
+                            locale: Locale(applicationSettings['generalLocale']!.split('_')[0], applicationSettings['generalLocale']!.split('_')[1]),
                             context: context, initialDate: targetDate,
                             firstDate: DateTime(2000), lastDate: DateTime(2101),
                             builder: (context, child) {
@@ -458,7 +475,7 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
                       margin: EdgeInsets.fromLTRB(0, 0, 0, 5), alignment: Alignment.centerLeft,
                       child: Row(
                         children: [
-                          Text( 'Schedules', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,), ),
+                          Text( languagePack['schedule_manager_subtitle'], style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,), ),
                           Expanded(
                             child: Row(
                               children: [
@@ -468,7 +485,7 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
                                     padding: EdgeInsets.only(right: 15),
                                     alignment: Alignment.centerRight,
                                     child: TextButton(
-                                      child: Text('<<  Prev', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),),
+                                      child: Text('<<  ${languagePack['schedule_manager_previous']}', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),),
                                       onPressed: () {
                                         setState(() {
                                           isInitialized = false;
@@ -484,7 +501,7 @@ class _AddScheduleModeState extends State<AddScheduleMode> {
                                 Container(
                                   alignment: Alignment.centerRight,
                                   child: TextButton(
-                                    child: Text('Next  >>', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),),
+                                    child: Text('${languagePack['schedule_manager_next']}  >>', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),),
                                     onPressed: () {
                                       setState(() {
                                         isInitialized = false;
@@ -577,7 +594,7 @@ class _AddTaskModeState extends State<AddTaskMode> {
     isBackKeyActivated = true;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Tasks updated'), duration: Duration(seconds: 1),),
+      SnackBar(content: Text(languagePack['task_manager_updated_msg']), duration: Duration(seconds: 1),),
     );
 
     isDirty = false;
@@ -646,18 +663,18 @@ class _AddTaskModeState extends State<AddTaskMode> {
           barrierDismissible: false,
           builder: (context) {
             return AlertDialog(
-              title: Text('Save the change'),
-              content: Text('Tasks has been changed. Do you want to save the change?'),
+              title: Text(languagePack['savecheck_title']),
+              content: Text(languagePack['savecheck_msg']),
               actions: [
                 TextButton(
-                  child: Text("Yes", style: TextStyle(color: Colors.amber[800]),), onPressed: () {
+                  child: Text(languagePack['savecheck_yes'], style: TextStyle(color: Colors.amber[800]),), onPressed: () {
                   saveNewTasks();
                   Navigator.pop(context);
                   Navigator.pop(context);
                 },
                 ),
                 TextButton(
-                  child: Text("No", style: TextStyle(color: Colors.black),), onPressed: () {
+                  child: Text(languagePack['savecheck_no'], style: TextStyle(color: Colors.black),), onPressed: () {
                   Navigator.pop(context);
                   Navigator.pop(context);
                 },
@@ -701,7 +718,7 @@ class _AddTaskModeState extends State<AddTaskMode> {
             onPressed: backKeyPressed,
             iconSize: 30,
           ),
-          title: Text('Task manager'),
+          title: Text(languagePack['task_manager_title']),
           titleTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 20),
         ),
 
@@ -724,12 +741,12 @@ class _AddTaskModeState extends State<AddTaskMode> {
                             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)), borderSide: BorderSide(width: 1, color: Colors.black),),
                             border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)),),
                             icon: Icon(Icons.list_alt_outlined, color: Colors.black,),
-                            labelText: "Task name", fillColor: Colors.black, floatingLabelStyle: TextStyle(color: Colors.black,),
+                            labelText: languagePack['task_manager_name_label'], fillColor: Colors.black, floatingLabelStyle: TextStyle(color: Colors.black,),
                           ),
                           validator: (text) {
                             if (text != null) {
-                              if (text.isEmpty) { return 'Enter the name of your task'; }
-                              if (text.contains(',')) { return "The name of the task cannot contain ','"; }
+                              if (text.isEmpty) { return languagePack['task_manager_name_validation_empty']; }
+                              if (text.contains(',')) { return languagePack['task_manager_name_validation_comma']; }
                             }
                             return null;
                           },
@@ -748,9 +765,9 @@ class _AddTaskModeState extends State<AddTaskMode> {
                                     child: TextFormField(
                                       validator: (text) {
                                         if (text != null) {
-                                          if (text.isEmpty) { return 'Enter the startdate of your task'; }
+                                          if (text.isEmpty) { return languagePack['task_manager_startdate_validation_empty']; }
                                           if (string2DateTime(text).isAfter(string2DateTime(duedateController.text))) {
-                                            return 'Start date needs to be before the due date';
+                                            return languagePack['task_manager_startdate_validation_after'];
                                           }
                                         }
                                         return null;
@@ -761,7 +778,7 @@ class _AddTaskModeState extends State<AddTaskMode> {
                                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)), borderSide: BorderSide(width: 1, color: Colors.black),),
                                         border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)),),
                                         icon: Icon(Icons.calendar_today, color: Colors.black,),
-                                        labelText: "Start date",
+                                        labelText: languagePack['task_manager_startdate_label'],
                                         fillColor: Colors.black,
                                         floatingLabelStyle: TextStyle(color: Colors.black,),
                                       ),
@@ -794,9 +811,9 @@ class _AddTaskModeState extends State<AddTaskMode> {
                                   TextFormField(
                                     validator: (text) {
                                       if (text != null) {
-                                        if (text.isEmpty) { return 'Enter the duedate of your task'; }
+                                        if (text.isEmpty) { return languagePack['task_manager_duedate_validation_empty']; }
                                         if (string2DateTime(text).isBefore(string2DateTime(startdateController.text))) {
-                                          return 'Due date needs to be after the start date';
+                                          return languagePack['task_manager_duedate_validation_after'];
                                         }
                                       }
                                       return null;
@@ -807,7 +824,7 @@ class _AddTaskModeState extends State<AddTaskMode> {
                                       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)), borderSide: BorderSide(width: 1, color: Colors.black),),
                                       border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)),),
                                       icon: Icon(Icons.calendar_today, color: Colors.black,),
-                                      labelText: "Due date",
+                                      labelText: languagePack['task_manager_duedate_label'],
                                       fillColor: Colors.black,
                                       floatingLabelStyle: TextStyle(color: Colors.black,),
                                     ),
@@ -854,7 +871,7 @@ class _AddTaskModeState extends State<AddTaskMode> {
                           Container(
                             alignment: Alignment.centerLeft,
                             margin: EdgeInsets.fromLTRB(0, 0, 0, 10),
-                            child: Text('Current tasks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,),),
+                            child: Text(languagePack['task_manager_subtitle'], style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,),),
                           ),
 
                           Expanded(
@@ -892,7 +909,7 @@ class _AddTaskModeState extends State<AddTaskMode> {
                     width: double.infinity,
                     height: double.infinity,
                     alignment: Alignment.center,
-                    child: Text('Add new tasks', style: TextStyle(
+                    child: Text(languagePack['task_manager_empty_msg'], style: TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey,
                     ),),
                   ) : ListView.builder(
@@ -934,20 +951,22 @@ class _AddTaskModeState extends State<AddTaskMode> {
                         padding: EdgeInsets.fromLTRB(10, 10, 10, 15),
                         child: Row(
                           children: [
-                            Container(
-                              alignment: Alignment.centerLeft,
-                              child: Text(dirtyTaskContents[index][0], style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w500,
-                                decoration: dirtyTaskContents[index][3] == '1' ? TextDecoration.lineThrough : TextDecoration.none,
-                                color: dirtyTaskContents[index][2] == dateTime2String(DateTime.now()) ? Colors.red : (string2DateTime(dirtyTaskContents[index][2]).isBefore(DateTime.now()) ? Colors.grey : Colors.black),
-                              ),),
+                            Expanded(
+                              child: Container(
+                                alignment: Alignment.centerLeft,
+                                child: Text(dirtyTaskContents[index][0], style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.w500,
+                                  decoration: dirtyTaskContents[index][3] == '1' ? TextDecoration.lineThrough : TextDecoration.none,
+                                  color: dirtyTaskContents[index][2] == dateTime2String(DateTime.now()) ? Colors.red : (string2DateTime(dirtyTaskContents[index][2]).isBefore(DateTime.now()) ? Colors.grey : Colors.black),
+                                ),),
+                              ),
                             ),
 
                             Expanded(
                               child: Container(
                                 width: double.infinity,
                                 alignment: Alignment.centerRight,
-                                child: Text('~${dirtyTaskContents[index][2]}', style: TextStyle(
+                                child: Text('~${addWeekday2String(dirtyTaskContents[index][2])}', style: TextStyle(
                                   fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey,
                                 ),),
                               ),
@@ -1017,7 +1036,7 @@ class _AddNotificationModeState extends State<AddNotificationMode> {
     isBackKeyActivated = true;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Notifications updated'), duration: Duration(seconds: 1),),
+      SnackBar(content: Text(languagePack['notification_manager_updated_msg']), duration: Duration(seconds: 1),),
     );
 
     isDirty = false;
@@ -1089,18 +1108,18 @@ class _AddNotificationModeState extends State<AddNotificationMode> {
           barrierDismissible: false,
           builder: (context) {
             return AlertDialog(
-              title: Text('Save the change'),
-              content: Text('Notifications has been changed. Do you want to save the change?'),
+              title: Text(languagePack['savecheck_title']),
+              content: Text(languagePack['savecheck_msg']),
               actions: [
                 TextButton(
-                  child: Text("Yes", style: TextStyle(color: Colors.amber[800]),), onPressed: () {
+                  child: Text(languagePack['savecheck_yes'], style: TextStyle(color: Colors.amber[800]),), onPressed: () {
                   saveNewNotification();
                   Navigator.pop(context);
                   Navigator.pop(context);
                 },
                 ),
                 TextButton(
-                  child: Text("No", style: TextStyle(color: Colors.black),), onPressed: () {
+                  child: Text(languagePack['savecheck_no'], style: TextStyle(color: Colors.black),), onPressed: () {
                   Navigator.pop(context);
                   Navigator.pop(context);
                 },
@@ -1144,7 +1163,7 @@ class _AddNotificationModeState extends State<AddNotificationMode> {
             onPressed: backKeyPressed,
             iconSize: 30,
           ),
-          title: Text('Notification manager'),
+          title: Text(languagePack['notification_manager_title']),
           titleTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 20),
         ),
 
@@ -1167,12 +1186,12 @@ class _AddNotificationModeState extends State<AddNotificationMode> {
                             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)), borderSide: BorderSide(width: 1, color: Colors.black),),
                             border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)),),
                             icon: Icon(Icons.list_alt_outlined, color: Colors.black,),
-                            labelText: "Notification name", fillColor: Colors.black, floatingLabelStyle: TextStyle(color: Colors.black,),
+                            labelText: languagePack['notification_manager_name_label'], fillColor: Colors.black, floatingLabelStyle: TextStyle(color: Colors.black,),
                           ),
                           validator: (text) {
                             if (text != null) {
-                              if (text.isEmpty) { return 'Enter the name of your notification'; }
-                              if (text.contains(',')) { return "The name of the notification cannot contain ','"; }
+                              if (text.isEmpty) { return languagePack['notification_manager_name_validation_empty']; }
+                              if (text.contains(',')) { return languagePack['notification_manager_name_validation_comma']; }
                             }
                             return null;
                           },
@@ -1190,7 +1209,7 @@ class _AddNotificationModeState extends State<AddNotificationMode> {
                                   children: [
                                     Container(
                                       padding: EdgeInsets.only(left:0, right:20),
-                                      child: Text('Months', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),),
+                                      child: Text(languagePack['notification_manager_months_title'], style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),),
                                     ),
                                     Expanded(
                                       child: DecoratedBox(
@@ -1237,7 +1256,7 @@ class _AddNotificationModeState extends State<AddNotificationMode> {
                                   children: [
                                     Container(
                                       padding: EdgeInsets.only(left:0, right:20),
-                                      child: Text('Days', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),),
+                                      child: Text(languagePack['notification_manager_days_title'], style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),),
                                     ),
                                     Expanded(
                                       child: DecoratedBox(
@@ -1285,7 +1304,7 @@ class _AddNotificationModeState extends State<AddNotificationMode> {
                           Container(
                             alignment: Alignment.centerLeft,
                             margin: EdgeInsets.fromLTRB(0, 0, 0, 10),
-                            child: Text('Notifications', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,),),
+                            child: Text(languagePack['notification_manager_subtitle'], style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,),),
                           ),
 
                           Expanded(
@@ -1323,7 +1342,7 @@ class _AddNotificationModeState extends State<AddNotificationMode> {
                     width: double.infinity,
                     height: double.infinity,
                     alignment: Alignment.center,
-                    child: Text('Add new notification', style: TextStyle(
+                    child: Text(languagePack['notification_manager_empty_msg'], style: TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey,
                     ),),
                   ) : ListView.builder(
@@ -1433,7 +1452,7 @@ class _AddMonthlyRoutineModeState extends State<AddMonthlyRoutineMode> {
     isBackKeyActivated = true;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Monthly routines updated'), duration: Duration(seconds: 1),),
+      SnackBar(content: Text(languagePack['monthly_routine_manager_updated_msg']), duration: Duration(seconds: 1),),
     );
 
     isDirty = false;
@@ -1494,18 +1513,18 @@ class _AddMonthlyRoutineModeState extends State<AddMonthlyRoutineMode> {
           barrierDismissible: false,
           builder: (context) {
             return AlertDialog(
-              title: Text('Save the change'),
-              content: Text('Routines has been changed. Do you want to save the change?'),
+              title: Text(languagePack['savecheck_title']),
+              content: Text(languagePack['savecheck_msg']),
               actions: [
                 TextButton(
-                  child: Text("Yes", style: TextStyle(color: Colors.amber[800]),), onPressed: () {
+                  child: Text(languagePack['savecheck_yes'], style: TextStyle(color: Colors.amber[800]),), onPressed: () {
                   saveNewRoutines();
                   Navigator.pop(context);
                   Navigator.pop(context);
                 },
                 ),
                 TextButton(
-                  child: Text("No", style: TextStyle(color: Colors.black),), onPressed: () {
+                  child: Text(languagePack['savecheck_no'], style: TextStyle(color: Colors.black),), onPressed: () {
                   Navigator.pop(context);
                   Navigator.pop(context);
                 },
@@ -1549,7 +1568,7 @@ class _AddMonthlyRoutineModeState extends State<AddMonthlyRoutineMode> {
             onPressed: backKeyPressed,
             iconSize: 30,
           ),
-          title: Text('Monthly routines'),
+          title: Text(languagePack['monthly_routine_manager_title']),
           titleTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 20),
         ),
 
@@ -1572,12 +1591,12 @@ class _AddMonthlyRoutineModeState extends State<AddMonthlyRoutineMode> {
                             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)), borderSide: BorderSide(width: 1, color: Colors.black),),
                             border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)),),
                             icon: Icon(Icons.list_alt_outlined, color: Colors.black,),
-                            labelText: "Routine name", fillColor: Colors.black, floatingLabelStyle: TextStyle(color: Colors.black,),
+                            labelText: languagePack['monthly_routine_manager_name_label'], fillColor: Colors.black, floatingLabelStyle: TextStyle(color: Colors.black,),
                           ),
                           validator: (text) {
                             if (text != null) {
-                              if (text.isEmpty) { return 'Enter the name of your routine'; }
-                              if (text.contains(',')) { return "The name of the routine cannot contain ','"; }
+                              if (text.isEmpty) { return languagePack['monthly_routine_manager_name_validation_empty']; }
+                              if (text.contains(',')) { return languagePack['monthly_routine_manager_name_validation_comma']; }
                             }
                             return null;
                           },
@@ -1623,7 +1642,7 @@ class _AddMonthlyRoutineModeState extends State<AddMonthlyRoutineMode> {
                           Container(
                             alignment: Alignment.centerLeft,
                             margin: EdgeInsets.fromLTRB(0, 0, 0, 10),
-                            child: Text('Current routines', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,),),
+                            child: Text(languagePack['monthly_routine_manager_subtitle'], style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,),),
                           ),
 
                           Expanded(
@@ -1661,7 +1680,7 @@ class _AddMonthlyRoutineModeState extends State<AddMonthlyRoutineMode> {
                     width: double.infinity,
                     height: double.infinity,
                     alignment: Alignment.center,
-                    child: Text('Add new tasks', style: TextStyle(
+                    child: Text(languagePack['monthly_routine_manager_empty_msg'], style: TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey,
                     ),),
                   ) : ListView.builder(
@@ -1709,11 +1728,11 @@ class _AddMonthlyRoutineModeState extends State<AddMonthlyRoutineMode> {
                               child: Container(
                                 width: double.infinity,
                                 alignment: Alignment.centerRight,
-                                child: Text('every ${dirtyRoutineContents[index][1]}' + (
-                                    dirtyRoutineContents[index][1][dirtyRoutineContents[index][1].length-1] == '1' ? 'st' :
-                                    dirtyRoutineContents[index][1][dirtyRoutineContents[index][1].length-1] == '2' ? 'nd' :
-                                    dirtyRoutineContents[index][1][dirtyRoutineContents[index][1].length-1] == '3' ? 'rd' :
-                                    'th'), style: TextStyle(
+                                child: Text('${languagePack['every']} ${dirtyRoutineContents[index][1]}' + (
+                                    dirtyRoutineContents[index][1][dirtyRoutineContents[index][1].length-1] == '1' ? languagePack['radix1'] :
+                                    dirtyRoutineContents[index][1][dirtyRoutineContents[index][1].length-1] == '2' ? languagePack['radix2'] :
+                                    dirtyRoutineContents[index][1][dirtyRoutineContents[index][1].length-1] == '3' ? languagePack['radix3'] :
+                                    languagePack['radix4']), style: TextStyle(
                                   fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey,
                                 ),),
                               ),
@@ -1774,7 +1793,7 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
     isBackKeyActivated = true;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Weekly routines updated'), duration: Duration(seconds: 1),),
+      SnackBar(content: Text(languagePack['weekly_routine_manager_updated_msg']), duration: Duration(seconds: 1),),
     );
 
     isDirty = false;
@@ -1785,7 +1804,7 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
   void addNewRoutine() {
     if (_formKey.currentState!.validate()) {
       setState(() {
-        dirtyRoutineContents.add([routineNameController.text, selectedWeekday]);
+        dirtyRoutineContents.add([routineNameController.text, weekdays.indexOf(selectedWeekday).toString()]);
         dirtyRoutineContents.sort((a, b) => weekdays.indexOf(a[1]).compareTo(weekdays.indexOf(b[1])),);
         routineNameController.text = '';
         selectedWeekday = weekdays[0];
@@ -1798,7 +1817,7 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
   void refreshSelectedRoutine() {
     if (_formKey.currentState!.validate()) {
       setState(() {
-        dirtyRoutineContents[selectedIndex] = [routineNameController.text, selectedWeekday];
+        dirtyRoutineContents[selectedIndex] = [routineNameController.text, weekdays.indexOf(selectedWeekday).toString()];
         dirtyRoutineContents.sort((a, b) => weekdays.indexOf(a[1]).compareTo(weekdays.indexOf(b[1])),);
         isAddNewRoutineMode = true;
         routineNameController.text = '';
@@ -1835,18 +1854,18 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
           barrierDismissible: false,
           builder: (context) {
             return AlertDialog(
-              title: Text('Save the change'),
-              content: Text('Routines has been changed. Do you want to save the change?'),
+              title: Text(languagePack['savecheck_title']),
+              content: Text(languagePack['savecheck_msg']),
               actions: [
                 TextButton(
-                  child: Text("Yes", style: TextStyle(color: Colors.amber[800]),), onPressed: () {
+                  child: Text(languagePack['savecheck_yes'], style: TextStyle(color: Colors.amber[800]),), onPressed: () {
                     saveNewRoutines();
                     Navigator.pop(context);
                     Navigator.pop(context);
                   },
                 ),
                 TextButton(
-                  child: Text("No", style: TextStyle(color: Colors.black),), onPressed: () {
+                  child: Text(languagePack['savecheck_no'], style: TextStyle(color: Colors.black),), onPressed: () {
                     Navigator.pop(context);
                     Navigator.pop(context);
                   },
@@ -1890,7 +1909,7 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
             onPressed: backKeyPressed,
             iconSize: 30,
           ),
-          title: Text('Weekly routines'),
+          title: Text(languagePack['weekly_routine_manager_title']),
           titleTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 20),
         ),
 
@@ -1913,12 +1932,12 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
                             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)), borderSide: BorderSide(width: 1, color: Colors.black),),
                             border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10.0)),),
                             icon: Icon(Icons.list_alt_outlined, color: Colors.black,),
-                            labelText: "Routine name", fillColor: Colors.black, floatingLabelStyle: TextStyle(color: Colors.black,),
+                            labelText: languagePack['weekly_routine_manager_name_label'], fillColor: Colors.black, floatingLabelStyle: TextStyle(color: Colors.black,),
                           ),
                           validator: (text) {
                             if (text != null) {
-                              if (text.isEmpty) { return 'Enter the name of your routine'; }
-                              if (text.contains(',')) { return "The name of the routine cannot contain ','"; }
+                              if (text.isEmpty) { return languagePack['weekly_routine_manager_name_validation_empty']; }
+                              if (text.contains(',')) { return languagePack['weekly_routine_manager_name_validation_comma']; }
                             }
                             return null;
                           },
@@ -1962,7 +1981,7 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
                           Container(
                             alignment: Alignment.centerLeft,
                             margin: EdgeInsets.fromLTRB(0, 0, 0, 10),
-                            child: Text('Current routines', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,),),
+                            child: Text(languagePack['weekly_routine_manager_subtitle'], style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,),),
                           ),
 
                           Expanded(
@@ -2000,7 +2019,7 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
                     width: double.infinity,
                     height: double.infinity,
                     alignment: Alignment.center,
-                    child: Text('Add new routines', style: TextStyle(
+                    child: Text(languagePack['weekly_routine_manager_empty_msg'], style: TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey,
                     ),),
                   ) : ListView.builder(
@@ -2048,7 +2067,7 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
                               child: Container(
                                 width: double.infinity,
                                 alignment: Alignment.centerRight,
-                                child: Text('${dirtyRoutineContents[index][1]}', style: TextStyle(
+                                child: Text('${weekdays[int.parse(dirtyRoutineContents[index][1])]}', style: TextStyle(
                                   fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey,
                                 ),),
                               ),
@@ -2082,6 +2101,21 @@ class SettingMode extends StatefulWidget {
 
 class _SettingModeState extends State<SettingMode> {
   bool isBackKeyActivated = true;
+  int selectedIndex = -1;
+
+  void refresh() {
+    setState(() {});
+  }
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+  }
+
+  void openSettingLauguageMode() {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => SettingLanguageMode())).then((value) {refresh();});
+  }
 
   void backKeyPressed() {
     if (isBackKeyActivated) {
@@ -2104,12 +2138,116 @@ class _SettingModeState extends State<SettingMode> {
             onPressed: backKeyPressed,
             iconSize: 30,
           ),
-          title: Text('Settings'),
+          title: Text(languagePack['settings_title']),
           titleTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 20),
         ),
 
         body: Container(
           color: Colors.white,
+          child: Container(
+            margin: EdgeInsets.fromLTRB(15, 15, 15, 15),
+            child: ListView(
+              physics: BouncingScrollPhysics(),
+              children: [
+                ListTile(
+                  leading: Icon(Icons.language_outlined),
+                  title: Row(
+                    children: [
+                      Text(languagePack['settings_language'], style: TextStyle(fontSize: 16)),
+                      Expanded(
+                        child: Container(
+                          width: double.infinity,
+                          alignment: Alignment.centerRight,
+                          child: Text('${languagePack[locale2Lanugages[applicationSettings['generalLocale']]]}', style: TextStyle(fontSize: 16, color: Colors.amber[800])),
+                        ),
+                      )
+                    ],
+                  ),
+                  onTap: () { openSettingLauguageMode(); },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/*
+ * SettingLanugageMode
+ *   Language steeing
+ */
+class SettingLanguageMode extends StatefulWidget {
+  const SettingLanguageMode({Key? key}) : super(key: key);
+
+  @override
+  _SettingLanguageModeState createState() => _SettingLanguageModeState();
+}
+
+class _SettingLanguageModeState extends State<SettingLanguageMode> {
+  bool isBackKeyActivated = true;
+  bool isDirty = false;
+  String? selectedLanguages = locale2Lanugages[applicationSettings['generalLocale']!];
+
+  void backKeyPressed() {
+    if (isBackKeyActivated) {
+      saveSettingFile(applicationSettings);
+
+      if (isDirty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(languagePack['rebuild_language_pack_msg']), duration: Duration(seconds: 2),),
+        );
+      }
+
+      FocusScope.of(context).unfocus();
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async {
+        if (isBackKeyActivated) { backKeyPressed(); return true; }
+        else { return false; }},
+      child: Scaffold(
+        appBar: AppBar(
+          elevation: 0.0, backgroundColor: Colors.white,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios, color: Colors.black,),
+            onPressed: backKeyPressed,
+            iconSize: 30,
+          ),
+          title: Text(languagePack['settings_language']),
+          titleTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 20),
+        ),
+
+        body: Container(
+          color: Colors.white,
+          child: Container(
+            margin: EdgeInsets.fromLTRB(15, 15, 15, 15),
+            child: ListView(
+              physics: BouncingScrollPhysics(),
+              children: List.generate(languages2Locale.keys.length, (index) => ListTile(
+                title: Text(languagePack[languages2Locale.keys.toList()[index]]),
+                leading: Radio<String>(
+                  value: languages2Locale.keys.toList()[index],
+                  groupValue: selectedLanguages,
+                  onChanged: (value) {
+                    setState(() {
+                      isDirty = true;
+                      selectedLanguages = value;
+                      if (selectedLanguages != null) {
+                        applicationSettings['generalLocale'] = languages2Locale[selectedLanguages]!;
+                      }
+                    });
+                  },
+                ),
+              ),)
+            ),
+          ),
         ),
       ),
     );
@@ -2221,7 +2359,7 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
         now.difference(currentBackPressTime ?? DateTime.now()) > Duration(seconds: 2)) {
       currentBackPressTime = now;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Press back again to exit'), duration: Duration(seconds: 2),),
+        SnackBar(content: Text(languagePack['exit_msg']), duration: Duration(seconds: 2),),
       );
       // showToastMessage('Press back again to exit');
       return Future.value(false);
@@ -2243,7 +2381,7 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
         radius: Radius.circular(10),
         child: Container(
           alignment: Alignment.center,
-          child: Text("Add new schedules", style: TextStyle(
+          child: Text(languagePack['schedule_manager_empty_msg'], style: TextStyle(
             fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey,
           ),),
         ),
@@ -2262,7 +2400,7 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
         child: Container(
           alignment: Alignment.center,
           width: double.infinity, height: height.toDouble(),
-          child: Text("Add new tasks", style: TextStyle(
+          child: Text(languagePack['task_manager_empty_msg'], style: TextStyle(
             fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey,
           ),),
         ),
@@ -2304,7 +2442,7 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
 
   Widget generateDashboardMode() {
     List dashboardWidgets = [];
-    String now = dateTime2String(DateTime.now());
+    String now = dateTime2StringWithoutWeekday(DateTime.now());
 
     // Generate schedule widget
     if (scheduleContents.keys.contains(now)) {
@@ -2319,17 +2457,17 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
 
     for (int index = 0; index < monthlyRoutineContents.length; index++) {
       if (monthlyRoutineContents[index][1] == getDayFromDateTime(DateTime.now())) {
-        targetRoutines.add(monthlyRoutineContents[index][0] + ' (monthly)');
+        targetRoutines.add(monthlyRoutineContents[index][0] + ' (${languagePack['monthly']})');
       } else if (getMonthIntFromDateTime(DateTime.now()) == getMonthSizeFromDateTime(DateTime.now())) {
         if (monthlyRoutineContents[index][1] >= getMonthSizeFromDateTime(DateTime.now())) {
-          targetRoutines.add(monthlyRoutineContents[index][0] + ' (end of month)');
+          targetRoutines.add(monthlyRoutineContents[index][0] + ' (${languagePack['end_of_month']})');
         }
       }
     }
 
     for (int index = 0; index < weeklyRoutineContents.length; index++) {
-      if (weeklyRoutineContents[index][1] == getWeekDayFromDateTime(DateTime.now())) {
-        targetRoutines.add(weeklyRoutineContents[index][0] + ' (weekly)');
+      if (weekdays[int.parse(weeklyRoutineContents[index][1])] == getWeekDayFromDateTime(DateTime.now())) {
+        targetRoutines.add(weeklyRoutineContents[index][0] + ' (${languagePack['weekly']})');
       }
     }
 
@@ -2407,6 +2545,75 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
     Navigator.push(context, MaterialPageRoute(builder: (context) => SettingMode())).then((value) {refresh();});
   }
 
+  Widget sideMenuBar() {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: <Widget>[
+          DrawerHeader(
+            child: Container(
+              alignment: Alignment.center,
+              child: Text(languagePack['side_menu_title'], style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ), textAlign: TextAlign.center,),
+            ),
+            decoration: BoxDecoration(color: Colors.amber[800],),
+          ),
+          ListTile(
+            leading: Icon(Icons.calendar_today_rounded),
+            title: Text(languagePack['schedule_manager_title']),
+            onTap: () {
+              Navigator.of(context).pop();
+              openScheduleManager(DateTime.now());
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.list_alt_rounded),
+            title: Text(languagePack['task_manager_title']),
+            onTap: () {
+              Navigator.of(context).pop();
+              openTaskManager();
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.check),
+            title: Text(languagePack['notification_manager_title']),
+            onTap: () {
+              Navigator.of(context).pop();
+              openNotificationManager();
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.access_time),
+            title: Text(languagePack['monthly_routine_manager_title']),
+            onTap: () {
+              Navigator.of(context).pop();
+              openMonthlyRoutineManager();
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.access_time),
+            title: Text(languagePack['weekly_routine_manager_title']),
+            onTap: () {
+              Navigator.of(context).pop();
+              openWeeklyRoutineManager();
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.settings),
+            title: Text(languagePack['settings_title']),
+            onTap: () {
+              Navigator.of(context).pop();
+              openSettings();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -2420,7 +2627,7 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
               onPressed: () { _key.currentState!.openDrawer(); },
               iconSize: 30,
             ),
-            title: Text('Simple Planner'), titleTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 20),
+            title: Text(languagePack['main_title']), titleTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 20),
           ),
 
           body: Container(
@@ -2444,87 +2651,22 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
             ),
           ),
 
-          drawer: Drawer(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: <Widget>[
-                DrawerHeader(
-                  child: Container(
-                    alignment: Alignment.center,
-                    child: Text('Managers & Settings', style: TextStyle(
-                      fontSize: 25,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ), textAlign: TextAlign.center,),
-                  ),
-                  decoration: BoxDecoration(color: Colors.amber[800],),
-                ),
-                ListTile(
-                  leading: Icon(Icons.calendar_today_rounded),
-                  title: Text('Schedule Manager'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    openScheduleManager(DateTime.now());
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.list_alt_rounded),
-                  title: Text('Task Manager'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    openTaskManager();
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.check),
-                  title: Text('Notification Manager'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    openNotificationManager();
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.access_time),
-                  title: Text('Monthly Routine Manager'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    openMonthlyRoutineManager();
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.access_time),
-                  title: Text('Weekly Routine Manager'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    openWeeklyRoutineManager();
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.settings),
-                  title: Text('Settings'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    openSettings();
-                  },
-                ),
-              ],
-            ),
-          ),
+          drawer: sideMenuBar(),
           drawerEnableOpenDragGesture: false,
 
           bottomNavigationBar: BottomNavigationBar(
-            items: const [
+            items: [
               BottomNavigationBarItem(
                 icon: Icon(Icons.dashboard_rounded),
-                label: 'Dashboard',
+                label: languagePack['bottom_menu_dashboard'],
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.calendar_today_rounded),
-                label: 'Schedules',
+                label: languagePack['bottom_menu_schedules'],
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.list_alt_rounded),
-                label: 'Tasks',
+                label: languagePack['bottom_menu_tasks'],
               ),
             ],
             elevation: 0.0, currentIndex: selectedModeIndex,
@@ -2598,7 +2740,7 @@ class _TodoListWidgetState extends State<DailyTodoListWidget> {
               child: Row(
                 children: [
                   Icon(Icons.calendar_today_rounded),
-                  Text('  ${widget.dateScheduled}',
+                  Text('  ${addWeekday2String(widget.dateScheduled)}',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -2658,7 +2800,7 @@ class _TaskWidgetState extends State<TaskWidget> {
                 child: Container(
                   padding: EdgeInsets.fromLTRB(0, 0, 10, 0),
                   alignment: Alignment.centerRight,
-                  child: Text('~ ${widget.duedate}', style: TextStyle(
+                  child: Text('~ ${addWeekday2String(widget.duedate)}', style: TextStyle(
                     fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey,
                   ),),
                 ),
@@ -2697,9 +2839,9 @@ class _RoutineWidgetState extends State<RoutineWidget> {
             Container(
               margin: EdgeInsets.fromLTRB(15, 10, 15, 10),
               child: Row(
-                children: const [
+                children: [
                   Icon(Icons.access_time),
-                  Text('  Routines',
+                  Text('  ${languagePack['dashboard_widget_routines_title']}',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -2761,9 +2903,9 @@ class _NotificationWidgetState extends State<NotificationWidget> {
             Container(
               margin: EdgeInsets.fromLTRB(15, 10, 15, 10),
               child: Row(
-                children: const [
+                children: [
                   Icon(Icons.check),
-                  Text('  Notifications',
+                  Text('  ${languagePack['dashboard_widget_notification_title']}',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                   ),
                 ],

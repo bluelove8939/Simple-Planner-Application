@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
+import 'dart:convert';
 
 
 // Constants
@@ -8,13 +10,25 @@ const Map<String, List<String>> weekdayNames = {
   'en_US': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
   'ko_KR': ['월', '화', '수', '목', '금', '토', '일'],
 };
-String generalLocale = 'en_US';
+
+List<String> defaultWeekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+Map<String, String> locale2Lanugages = {
+  'en_US': 'english',
+  'ko_KR': 'korean',
+};
+
+Map<String, String> languages2Locale = {
+  'english': 'en_US',
+  'korean': 'ko_KR',
+};
 
 
 // Initial settings
-Map applicationSettings = {
-  'backup_dirname': rootDirname() + '/Simple Planner/backups',
+Map<String, String> defaultApplicationSettings = {
+  'generalLocale': 'ko_KR',
 };
+Map<String, String> applicationSettings = {};
 
 
 // Conversion functions
@@ -33,7 +47,7 @@ DateTime int2DateTime(int year, int month, int day) {
 }
 
 String dateTime2String(DateTime targetDate) {
-  return DateFormat('yyyy-MM-dd E').format(targetDate);
+  return dateTime2StringWithoutWeekday(targetDate) + ' ' + getWeekDayFromDateTime(targetDate);
 }
 
 String dateTime2StringWithoutWeekday(DateTime targetDate) {
@@ -61,7 +75,9 @@ String getDayFromDateTime(DateTime targetDate) {
 }
 
 String getWeekDayFromDateTime(DateTime targetDate) {
-  return DateFormat('E').format(targetDate);
+  String defaultWeekday = DateFormat('E').format(targetDate);
+  int targetWeekdayIndex = defaultWeekdayNames.indexOf(defaultWeekday);
+  return weekdayNames[applicationSettings['generalLocale']]![targetWeekdayIndex];
 }
 
 int getMonthIntFromDateTime(DateTime targetDate) {
@@ -148,6 +164,15 @@ Future<File> weeklyRoutineFile() async {
   return File('$path/weekly_routines.csv');
 }
 
+Future<File> settingFile() async {
+  final path = await appDataDirname();
+  return File('$path/settings.csv');
+}
+
+Future<File> languagePackFile(String targetLocale) async {
+  return File('assets/locale/$targetLocale.json');
+}
+
 
 // Read functions
 Future<List> listOfScheduleFiles() async {
@@ -172,9 +197,8 @@ Future<Map<String, List<List>>> readAllScheduleFiles() async {
     for (int index = 0; index < linesplit.length; index++) {
       commasplit.add(linesplit[index].split(','));
     }
-    contents[addWeekday2String(getDateFromFilepath(targetFile.path))] = commasplit;
+    contents[getDateFromFilepath(targetFile.path)] = commasplit;
   }
-
   return contents;
 }
 
@@ -188,8 +212,6 @@ Future<List<List>> readTaskFile() async {
       for (int index = 0; index < tasks.length; index++) {
         List content = tasks[index].split(',');
         if (content.isNotEmpty) {
-          content[1] = addWeekday2String(content[1]);
-          content[2] = addWeekday2String(content[2]);
           result.add(content);
         }
       }
@@ -253,7 +275,6 @@ Future<List<List>> readWeeklyRoutineFile() async {
       for (int index = 0; index < tasks.length; index++) {
         List content = tasks[index].split(',');
         if (content.isNotEmpty) {
-          content[1] = weekdayNames[generalLocale]![int.parse(content[1])];
           result.add(content);
         }
       }
@@ -265,11 +286,43 @@ Future<List<List>> readWeeklyRoutineFile() async {
   }
 }
 
+Future<Map<String, String>> readSettingFile() async {
+  try {
+    File targetFile = await settingFile();
+    String readContent = await targetFile.readAsString();
+    Map<String, String> result = {};
+    if (readContent.isNotEmpty) {
+      List<String> tasks = readContent.split('\n');
+      for (int index = 0; index < tasks.length; index++) {
+        List content = tasks[index].split(',');
+        if (content.isNotEmpty && content.length == 2) {
+          result[content[0]] = content[1];
+        }
+      }
+    }
+    return result;
+  } catch (e) {
+    print('Setting file not found');
+    return defaultApplicationSettings;
+  }
+}
+
+Future<Map> readLanguagePackFile(String targetLocale) async {
+  try {
+    String readContent = await rootBundle.loadString('assets/locale/$targetLocale.json');
+    Map result = json.decode(readContent);
+    return result;
+  } catch (e) {
+    print('Cannot assets/locale/$targetLocale.json $e');
+    return {};
+  }
+}
+
 
 // Save functions
 void saveScheduleFile(String targetDate, List<List>? contents) async {
   try {
-    File targetFile = await scheduleFile(removeWeekday2String(targetDate));
+    File targetFile = await scheduleFile(targetDate);
     if (contents != null) {
       if (contents.isNotEmpty) {
         List<String> commajoin = [];
@@ -291,10 +344,7 @@ void saveTaskFile(List<List> contents) async {
     File targetFile = await taskFile();
     List<String> assembledContents = [];
     for (int index = 0; index < contents.length; index++) {
-      List line = contents[index].toList();
-      line[1] = removeWeekday2String(line[1]);
-      line[2] = removeWeekday2String(line[2]);
-      assembledContents.add(line.join(','));
+      assembledContents.add(contents[index].join(','));
     }
     targetFile.writeAsString(assembledContents.join('\n'));
   } catch (e) {
@@ -333,9 +383,20 @@ void saveWeeklyRoutineFile(List<List> contents) async {
     File targetFile = await weeklyRoutineFile();
     List<String> assembledContents = [];
     for (int index = 0; index < contents.length; index++) {
-      List line = contents[index].toList();
-      line[1] = weekdayNames[generalLocale]!.indexOf(line[1]);
-      assembledContents.add(line.join(','));
+      assembledContents.add(contents[index].join(','));
+    }
+    targetFile.writeAsString(assembledContents.join('\n'));
+  } catch (e) {
+    print('[ERROR] Cannot save weekly routine file ($e)');
+  }
+}
+
+void saveSettingFile(Map<String, String> contents) async {
+  try {
+    File targetFile = await settingFile();
+    List<String> assembledContents = [];
+    for (String key in contents.keys) {
+      assembledContents.add('$key,${contents[key]}');
     }
     targetFile.writeAsString(assembledContents.join('\n'));
   } catch (e) {
