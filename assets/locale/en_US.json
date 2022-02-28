@@ -65,7 +65,11 @@
   "weekly_routine_manager_name_validation_comma": "Name of the routine cannot contain ','",
 
   "settings_title": "Settings",
+  "settings_login": "Login",
+  "settings_logout": "Logout",
   "settings_language": "Languages",
+  "settings_backup": "Backup",
+  "settings_restore": "Restore",
 
   "expression_monday": "Mon",
   "expression_tuesday": "Tue",
@@ -91,10 +95,19 @@
   "radix3": "rd",
   "radix4": "th",
 
+  "login_complete_msg": "Login completed",
+  "login_fail_msg": "Login failed (check authentication or internet connection)",
+  "logout_complete_msg": "Logout complete",
   "rebuild_language_pack_msg": "Restart applicaiton to load new language pack",
   "backup_start_msg": "Starting backup to your google drive",
   "backup_complete_msg": "Backup complete",
+  "backup_fail_msg": "Backup failed (check authentication or internet connection)",
   "restore_preparation_msg": "Generating list of saved backup directories",
+  "restore_preparation_fail_msg": "Failed on generating list of saved backup directories",
   "restore_start_msg": "Starting to restore data from your google drive",
-  "restore_complete_msg": "Restoring complete"
+  "restore_complete_msg": "Restoration complete",
+  "restore_select_msg": "Select backup directory",
+  "restore_fail_msg": "Retoration failed (check authentication or internet connection)",
+  "processing_msg": "processing...",
+  "ongoing_process_detected": "There's ongoing process detected"
 }

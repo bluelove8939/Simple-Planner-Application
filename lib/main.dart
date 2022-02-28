@@ -22,6 +22,7 @@ List<List> notificationContents = [];
 
 // Other global variables
 DateTime addScheduleInitialDate = DateTime.now();
+sign_in.GoogleSignIn? googleSignIn;    // User login module
 sign_in.GoogleSignInAccount? account;  // User login account
 Map<String, String>? authHeaders;
 GoogleAuthClient? authenticateClient;
@@ -46,24 +47,42 @@ void saveAllFiles() {
   saveSettingFile(applicationSettings);
 }
 
-Future<sign_in.GoogleSignInAccount?> loginActivation() async {
-  if (account == null || applicationSettings['loginInitialized'] == 'false') {
-    final googleSignIn = sign_in.GoogleSignIn.standard(scopes: [drive.DriveApi.driveScope]);
-    sign_in.GoogleSignInAccount? targetAccount = await googleSignIn.signIn();
-    applicationSettings['loginInitialized'] = "true";
-    authHeaders = await targetAccount!.authHeaders;
+Future<bool> loginActivation() async {
+  try {
+    if (account == null || applicationSettings['loginInitialized'] == 'false') {
+      googleSignIn = sign_in.GoogleSignIn.standard(scopes: [drive.DriveApi.driveScope]);
+      account = await googleSignIn!.signIn();
+      authHeaders = await account!.authHeaders;
+      authenticateClient = GoogleAuthClient(authHeaders!);
+      driveApi = drive.DriveApi(authenticateClient!);
+      applicationSettings['loginInitialized'] = "true";
+      saveSettingFile(applicationSettings);
+    }
+
+    authHeaders = await account!.authHeaders;
     authenticateClient = GoogleAuthClient(authHeaders!);
     driveApi = drive.DriveApi(authenticateClient!);
+    applicationSettings['loginInitialized'] = "true";
+    saveSettingFile(applicationSettings);
 
-    return targetAccount;
+    return true;
+  } catch(e) {
+    print('login failed ($e)');
+    return false;
   }
-
-  authHeaders = await account!.authHeaders;
-  authenticateClient = GoogleAuthClient(authHeaders!);
-  driveApi = drive.DriveApi(authenticateClient!);
-  return account;
 }
 
+Future<void> logoutActivaiton() async {
+  if (googleSignIn != null) {
+    googleSignIn!.signOut();
+    account = null;
+    authHeaders = null;
+    authenticateClient = null;
+    driveApi = null;
+    applicationSettings['loginInitialized'] = "false";
+    saveSettingFile(applicationSettings);
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -75,7 +94,7 @@ void main() async {
   weeklyRoutineContents = await readWeeklyRoutineFile();
   languagePack = await readLanguagePackFile(applicationSettings['generalLocale'] ?? defaultApplicationSettings['generalLocale']!);
   if (applicationSettings['loginInitialized'] == 'true') {
-    account = await loginActivation();
+    await loginActivation();
   }
 
   print('===== $scheduleContents');
@@ -2152,6 +2171,10 @@ class _SettingModeState extends State<SettingMode> {
     if (isBackKeyActivated) {
       FocusScope.of(context).unfocus();
       Navigator.pop(context);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(languagePack['ongoing_process_detected'] ?? "ongoing_process_detected"), duration: Duration(seconds: 2),),
+      );
     }
   }
 
@@ -2181,15 +2204,15 @@ class _SettingModeState extends State<SettingMode> {
               physics: BouncingScrollPhysics(),
               children: [
                 ListTile(
-                  leading: Icon(Icons.login_outlined),
+                  leading: applicationSettings['loginInitialized'] == 'false' ? Icon(Icons.login_outlined) : Icon(Icons.logout_outlined ),
                   title: Row(
                     children: [
-                      Text('Login', style: TextStyle(fontSize: 16)),
+                      Text(applicationSettings['loginInitialized'] == 'false' ? languagePack['settings_login'] : languagePack['settings_logout'], style: TextStyle(fontSize: 16)),
                       Expanded(
                         child: Container(
                           width: double.infinity,
                           alignment: Alignment.centerRight,
-                          child: Text(applicationSettings['loginInitialized'] == 'false' ? 'not authenticated' : account!.email.toString(), style: TextStyle(fontSize: 16, color: Colors.amber[800])),
+                          child: Text(applicationSettings['loginInitialized'] == 'false' ? 'not authenticated' : account!.displayName.toString(), style: TextStyle(fontSize: 16, color: Colors.amber[800])),
                         ),
                       )
                     ],
@@ -2197,9 +2220,29 @@ class _SettingModeState extends State<SettingMode> {
                   onTap: () async {
                     if (isSettingActivated) {
                       if (account == null) {
-                        account = await loginActivation();
+                        bool loginResult = await loginActivation();
+                        if (loginResult) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(languagePack['login_complete_msg'] ?? "login complete"), duration: Duration(seconds: 2),),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(languagePack['login_fail_msg'] ?? "login_fail_msg"), duration: Duration(seconds: 2),),
+                          );
+                        }
+
+                        setState(() {});
+                      } else {
+                        await logoutActivaiton();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(languagePack['logout_complete_msg'] ?? "logout_complete_msg"), duration: Duration(seconds: 2),),
+                        );
                         setState(() {});
                       }
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(languagePack['ongoing_process_detected'] ?? "ongoing_process_detected"), duration: Duration(seconds: 2),),
+                      );
                     }
                   },
                 ),
@@ -2217,38 +2260,88 @@ class _SettingModeState extends State<SettingMode> {
                       )
                     ],
                   ),
-                  onTap: () {if (isSettingActivated) { openSettingLauguageMode(); }},
+                  onTap: () {
+                    if (isSettingActivated) {
+                      openSettingLauguageMode();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(languagePack['ongoing_process_detected'] ?? "ongoing_process_detected"), duration: Duration(seconds: 2),),
+                      );
+                    }
+                  },
                 ),
                 ListTile(
                   leading: Icon(Icons.backup_outlined),
-                  title: Text('Backup', style: TextStyle(fontSize: 16)),
+                  title: Text(languagePack['settings_backup'], style: TextStyle(fontSize: 16)),
                   onTap: () async {
-                    if (isSettingActivated) {
+                    if (isSettingActivated && applicationSettings['loginInitialized'] == 'true' && driveApi != null && authenticateClient != null) {
                       isBackKeyActivated = false;
                       isSettingActivated = false;
 
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(languagePack['backup_start_msg'] ?? "backup start"), duration: Duration(seconds: 2),),
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (BuildContext context) {
+                          return WillPopScope(
+                            onWillPop: () async => false,
+                            child: AlertDialog(
+                              content: Container(
+                                  width: 300, height: 200, alignment: Alignment.center,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Center(
+                                        child: SizedBox(
+                                          height: 50.0, width: 50.0,
+                                          child: CircularProgressIndicator(
+                                            value: null, strokeWidth: 7.0, color: Colors.amber[800],
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        margin: EdgeInsets.only(top: 25.0),
+                                        child: Center(
+                                          child: Text(languagePack['processing_msg'], style: TextStyle(fontSize: 16, color: Colors.black),),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                              ),
+                            ),
+                          );
+                        },
                       );
 
                       bool backupResult = await backupAllFiles(driveApi);
-                      print(backupResult);
-                      setState(() {});
+                      if (!backupResult) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(languagePack['backup_fail_msg'] ?? "backup_fail_msg"), duration: Duration(seconds: 2),),
+                        );
+                      } else {
+                        setState(() {});
 
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(languagePack['backup_complete_msg'] ?? "backup complete"), duration: Duration(seconds: 2),),
-                      );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(languagePack['backup_complete_msg'] ?? "backup complete"), duration: Duration(seconds: 2),),
+                        );
+                      }
+
+                      Navigator.pop(context);
 
                       isBackKeyActivated = true;
                       isSettingActivated = true;
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(languagePack['ongoing_process_detected'] ?? "ongoing_process_detected"), duration: Duration(seconds: 2),),
+                      );
                     }
                   },
                 ),
                 ListTile(
                   leading: Icon(Icons.restore),
-                  title: Text('Restore', style: TextStyle(fontSize: 16)),
+                  title: Text(languagePack['settings_restore'], style: TextStyle(fontSize: 16)),
                   onTap: () async {
-                    if (isSettingActivated) {
+                    if (isSettingActivated && applicationSettings['loginInitialized'] == 'true' && driveApi != null && authenticateClient != null) {
                       isBackKeyActivated = false;
                       isSettingActivated = false;
 
@@ -2259,15 +2352,23 @@ class _SettingModeState extends State<SettingMode> {
                       String selectedTargetDirName = "not selected";
                       List<String> backupTargetDirNames = await backupTargetDirList(driveApi);
 
+                      if (backupTargetDirNames.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(languagePack['restore_preparation_fail_msg'] ?? "restore_preparation_fail_msg"), duration: Duration(seconds: 2),),
+                        );
+                        return;
+                      }
+
                       await showDialog(
                         context: context,
                         builder: (BuildContext context) {
                           return AlertDialog(
-                            title: Text("Select backup directory"),
+                            title: Text(languagePack['restore_select_msg'] ?? 'restore_select_msg'),
                             content: SizedBox(
-                              width: MediaQuery.of(context).size.height - 50,
+                              width: MediaQuery.of(context).size.width - 10,
                               height: MediaQuery.of(context).size.height,
                               child: ListView.builder(
+                                physics: BouncingScrollPhysics(),
                                 itemCount: backupTargetDirNames.length,
                                 itemBuilder: (context, index) {
                                   return ListTile(
@@ -2286,25 +2387,72 @@ class _SettingModeState extends State<SettingMode> {
                       );
 
                       if (selectedTargetDirName != 'not selected') {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(languagePack['restore_start_msg'] ?? "restore start"), duration: Duration(seconds: 2),),
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (BuildContext context) {
+                            return WillPopScope(
+                              onWillPop: () async => false,
+                              child: AlertDialog(
+                                content: Container(
+                                  width: 300, height: 200, alignment: Alignment.center,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Center(
+                                        child: SizedBox(
+                                          height: 50.0, width: 50.0,
+                                          child: CircularProgressIndicator(
+                                            value: null, strokeWidth: 7.0, color: Colors.amber[800],
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        margin: EdgeInsets.only(top: 25.0),
+                                        child: Center(
+                                          child: Text(languagePack['processing_msg'], style: TextStyle(fontSize: 16, color: Colors.black),),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                ),
+                              ),
+                            );
+                          },
                         );
 
-                        await restoreAllFiles(driveApi, selectedTargetDirName, authenticateClient);
+                        bool restorationResult = await restoreAllFiles(driveApi, selectedTargetDirName, authenticateClient);
 
-                        scheduleContents = await readAllScheduleFiles();
-                        taskContents = await readTaskFile();
-                        notificationContents = await readNotificationFile();
-                        monthlyRoutineContents = await readMonthlyRoutineFile();
-                        weeklyRoutineContents = await readWeeklyRoutineFile();
+                        if (!restorationResult) {
+                          saveAllFiles();
 
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(languagePack['restore_complete_msg'] ?? "restore start"), duration: Duration(seconds: 2),),
-                        );
+                          Navigator.pop(context);
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(languagePack['restore_fail_msg'] ?? "restore_fail_msg"), duration: Duration(seconds: 2),),
+                          );
+                        } else {
+                          scheduleContents = await readAllScheduleFiles();
+                          taskContents = await readTaskFile();
+                          notificationContents = await readNotificationFile();
+                          monthlyRoutineContents = await readMonthlyRoutineFile();
+                          weeklyRoutineContents = await readWeeklyRoutineFile();
+
+                          Navigator.pop(context);
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(languagePack['restore_complete_msg'] ?? "restore start"), duration: Duration(seconds: 2),),
+                          );
+                        }
                       }
 
                       isBackKeyActivated = true;
                       isSettingActivated = true;
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(languagePack['ongoing_process_detected'] ?? "ongoing_process_detected"), duration: Duration(seconds: 2),),
+                      );
                     }
                   },
                 ),
@@ -2693,16 +2841,22 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
       child: ListView(
         padding: EdgeInsets.zero,
         children: <Widget>[
-          DrawerHeader(
-            child: Container(
-              alignment: Alignment.center,
-              child: Text(languagePack['side_menu_title'], style: TextStyle(
-                fontSize: 25,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ), textAlign: TextAlign.center,),
+          UserAccountsDrawerHeader(
+            accountName: Text(account != null && applicationSettings['loginInitialized'] == 'true' ? account!.displayName.toString() : 'User name'),
+            accountEmail: Text(account != null && applicationSettings['loginInitialized'] == 'true' ? account!.email : 'emailaccount@google.com'),
+            currentAccountPicture: CircleAvatar(
+              child: ClipOval(
+                child: account != null && applicationSettings['loginInitialized'] == 'true' ? Image.network(
+                  account!.photoUrl.toString(),
+                  fit: BoxFit.cover,
+                  width: 90,
+                  height: 90,
+                ) : Icon(Icons.person),
+              ),
             ),
-            decoration: BoxDecoration(color: Colors.amber[800],),
+            decoration: BoxDecoration(
+              color: Colors.amber[800],
+            ),
           ),
           ListTile(
             leading: Icon(Icons.calendar_today_rounded),

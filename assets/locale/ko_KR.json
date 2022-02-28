@@ -65,7 +65,11 @@
   "weekly_routine_manager_name_validation_comma": "루틴 이름은 쉼표를 포함할 수 없습니다.",
 
   "settings_title": "설정",
+  "settings_login": "로그인",
+  "settings_logout": "로그아웃",
   "settings_language": "언어",
+  "settings_backup": "백업",
+  "settings_restore": "복원",
 
   "expression_monday": "월",
   "expression_tuesday": "화",
@@ -91,10 +95,19 @@
   "radix3": "일",
   "radix4": "일",
 
+  "login_complete_msg": "로그인 되었습니다",
+  "login_fail_msg": "로그인에 실패하였습니다 (계정 권한 및 인터넷 연결을 확인하세요)",
+  "logout_complete_msg": "로그아웃 되었습니다",
   "rebuild_language_pack_msg": "새로운 언어를 적용하기 위해서는 어플리케이션을 재시작하세요",
   "backup_start_msg": "구글 드라이브에 데이터를 백업합니다",
   "backup_complete_msg": "백업이 완료되었습니다",
+  "backup_fail_msg": "백업에 실패하였습니다 (계정 권한 및 인터넷 연결을 확인하세요)",
   "restore_preparation_msg": "저장된 백업 디렉토리 리스트를 읽는 중입니다",
+  "restore_preparation_fail_msg": "저장된 백업 디렉토리 리스트를 불러오는데 실패하였습니다",
   "restore_start_msg": "구글 드라이브에 저장된 데이터를 복원합니다",
-  "restore_complete_msg": "복원이 완료되었습니다"
+  "restore_complete_msg": "복원이 완료되었습니다",
+  "restore_select_msg": "백업 데이터를 선택하세요",
+  "restore_fail_msg": "복원에 실패하였습니다 (계정 권한 및 인터넷 연결을 확인하세요)",
+  "processing_msg": "처리하는 중...",
+  "ongoing_process_detected": "현재 실행되고 있는 작업이 있습니다"
 }

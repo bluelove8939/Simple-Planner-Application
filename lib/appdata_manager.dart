@@ -19,7 +19,7 @@ class GoogleAuthClient extends http.BaseClient {
 }
 
 
-// Constants
+// Constants and global variables
 const Map<String, List<String>> weekdayNames = {
   'en_US': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
   'ko_KR': ['월', '화', '수', '목', '금', '토', '일'],
@@ -36,6 +36,9 @@ Map<String, String> languages2Locale = {
   'english': 'en_US',
   'korean': 'ko_KR',
 };
+
+enum progressStatus {progress, end, error}
+String? logMessage;
 
 
 // Initial settings
@@ -429,192 +432,230 @@ void saveSettingFile(Map<String, String> contents) async {
 
 // Google Drive API functions
 Future<bool> backupAllFiles(drive.DriveApi? driveApi) async {
-  bool totalResult = true;
+  try {
+    bool totalResult = true;
 
-  if (driveApi != null) {
-    drive.FileList fileList = await driveApi.files.list(spaces: 'drive', q: "trashed = false");
-    List<drive.File>? files = fileList.files;
-    String backupDate = DateTime.now().toString();
+    if (driveApi != null) {
+      drive.FileList fileList = await driveApi.files.list(spaces: 'drive', q: "trashed = false");
+      List<drive.File>? files = fileList.files;
+      String backupDate = DateTime.now().toString();
 
-    String rootID = "";
-    String targetDirID = "";
-    String scheduleDirID = "";
+      String rootID = "";
+      String targetDirID = "";
+      String scheduleDirID = "";
 
-    bool initialized = false;
-    if (files != null) {
-      for (int index = 0; index < fileList.files!.length; index++) {
-        if (files[index].mimeType == "application/vnd.google-apps.folder" && files[index].name == 'Simple Planner Backups') {
-          initialized = true;
-          rootID = files[index].id!;
+      // Initialize root directory
+      bool initialized = false;
+      if (files != null) {
+        for (int index = 0; index < fileList.files!.length; index++) {
+          if (files[index].mimeType == "application/vnd.google-apps.folder" && files[index].name == 'Simple Planner Backups') {
+            initialized = true;
+            rootID = files[index].id!;
+          }
         }
       }
-    }
 
-    var rootDirFile = drive.File();
-    rootDirFile.name = "Simple Planner Backups";
-    rootDirFile.mimeType = 'application/vnd.google-apps.folder';
-    if (!initialized) {
-      final result = await driveApi.files.create(rootDirFile);
-      rootID = result.id!;
-      print("generated root dir $rootID");
-    }
+      var rootDirFile = drive.File();
+      rootDirFile.name = "Simple Planner Backups";
+      rootDirFile.mimeType = 'application/vnd.google-apps.folder';
+      if (!initialized) {
+        final result = await driveApi.files.create(rootDirFile);
+        rootID = result.id!;
+        print("generated root dir $rootID");
+      }
 
-    var targetDirFile = drive.File();
-    targetDirFile.name = backupDate;
-    targetDirFile.mimeType = 'application/vnd.google-apps.folder';
-    targetDirFile.parents = [rootID];
-    final targetDir = await driveApi.files.create(targetDirFile);
-    targetDirID = targetDir.id!;
-    print("generated target dir $targetDirID");
+      // Remove first target directory if there's more than 10 directories
+      final foundTargetDirNames = await driveApi.files.list(spaces: 'drive', q: "'$rootID' in parents and trashed = false",);
+      if (foundTargetDirNames.files != null && foundTargetDirNames.files!.length > 9) {
+        List fileNames = foundTargetDirNames.files!;
+        fileNames.sort((a, b) => a.name!.compareTo(b.name!));
+        while (fileNames.length > 9) {
+          driveApi.files.delete(fileNames[0].id!);
+          print('delete target directory (${fileNames[0].id!}) => current dirlist length: ${fileNames.length}');
+          fileNames.removeAt(0);
+        }
+      }
 
-    var scheduleDirFile = drive.File();
-    scheduleDirFile.name = "Schedules";
-    scheduleDirFile.mimeType = 'application/vnd.google-apps.folder';
-    scheduleDirFile.parents = [targetDirID];
-    final scheduleDir = await driveApi.files.create(scheduleDirFile);
-    scheduleDirID = scheduleDir.id!;
-    print("generated schedule dir $scheduleDirID");
+      // Initialize target directory
+      var targetDirFile = drive.File();
+      targetDirFile.name = backupDate;
+      targetDirFile.mimeType = 'application/vnd.google-apps.folder';
+      targetDirFile.parents = [rootID];
+      final targetDir = await driveApi.files.create(targetDirFile);
+      targetDirID = targetDir.id!;
+      print("generated target dir $targetDirID");
 
-    // Backup schedule files
-    for (File targetFile in await listOfScheduleFiles()) {
-      bool result = await backupTargetFile(targetFile, 'txt', driveApi, scheduleDirID);
+      // Initialize schedule directory
+      var scheduleDirFile = drive.File();
+      scheduleDirFile.name = "Schedules";
+      scheduleDirFile.mimeType = 'application/vnd.google-apps.folder';
+      scheduleDirFile.parents = [targetDirID];
+      final scheduleDir = await driveApi.files.create(scheduleDirFile);
+      scheduleDirID = scheduleDir.id!;
+      print("generated schedule dir $scheduleDirID");
+
+      // Backup schedule files
+      for (File targetFile in await listOfScheduleFiles()) {
+        bool result = await backupTargetFile(targetFile, 'txt', driveApi, scheduleDirID);
+        if (!result) { totalResult = false; }
+      }
+
+      // Backup task file
+      File targetFile = await taskFile();
+      bool result = await backupTargetFile(targetFile, 'csv', driveApi, targetDirID);
       if (!result) { totalResult = false; }
+
+      // Backup notification file
+      targetFile = await notificationFile();
+      result = await backupTargetFile(targetFile, 'csv', driveApi, targetDirID);
+      if (!result) { totalResult = false; }
+
+      // Backup monthly routine file
+      targetFile = await monthlyRoutineFile();
+      result = await backupTargetFile(targetFile, 'csv', driveApi, targetDirID);
+      if (!result) { totalResult = false; }
+
+      // Backup weekly routine file
+      targetFile = await weeklyRoutineFile();
+      result = await backupTargetFile(targetFile, 'csv', driveApi, targetDirID);
+      if (!result) { totalResult = false; }
+    } else {
+      totalResult = false;
     }
 
-    // Backup task file
-    File targetFile = await taskFile();
-    bool result = await backupTargetFile(targetFile, 'csv', driveApi, targetDirID);
-    if (!result) { totalResult = false; }
-
-    // Backup notification file
-    targetFile = await notificationFile();
-    result = await backupTargetFile(targetFile, 'csv', driveApi, targetDirID);
-    if (!result) { totalResult = false; }
-
-    // Backup monthly routine file
-    targetFile = await monthlyRoutineFile();
-    result = await backupTargetFile(targetFile, 'csv', driveApi, targetDirID);
-    if (!result) { totalResult = false; }
-
-    // Backup weekly routine file
-    targetFile = await weeklyRoutineFile();
-    result = await backupTargetFile(targetFile, 'csv', driveApi, targetDirID);
-    if (!result) { totalResult = false; }
-  } else {
-    totalResult = false;
+    return totalResult;
+  } catch (e) {
+    print("backup error occurred ($e)");
+    return false;
   }
-
-  return totalResult;
 }
 
 Future<bool> backupTargetFile(File targetFile, String extension, drive.DriveApi driveApi, String parentDirID) async {
-  var backupFile = drive.File();
-  String contents = await targetFile.readAsString(encoding: utf8);
-  List<int> encodedContents = utf8.encode(contents);
-  backupFile.name = "${getDateFromFilepath(targetFile.path)}.$extension";
-  backupFile.parents = [parentDirID];
-  Stream<List<int>> mediaStream = Future.value(encodedContents).asStream().asBroadcastStream();
-  var media = drive.Media(mediaStream, encodedContents.length, contentType: "text/plain; charset=UTF-8");
-  final result = await driveApi.files.create(backupFile, uploadMedia: media,);
-  print("Backup file ${targetFile.path} as file id  ${result.id}");
+  try {
+    var backupFile = drive.File();
+    String contents = await targetFile.readAsString(encoding: utf8);
+    List<int> encodedContents = utf8.encode(contents);
+    backupFile.name = "${getDateFromFilepath(targetFile.path)}.$extension";
+    backupFile.parents = [parentDirID];
+    Stream<List<int>> mediaStream = Future.value(encodedContents).asStream().asBroadcastStream();
+    var media = drive.Media(mediaStream, encodedContents.length, contentType: "text/plain; charset=UTF-8");
+    final result = await driveApi.files.create(backupFile, uploadMedia: media,);
+    print("Backup file ${targetFile.path} as file id  ${result.id}");
 
-  return true;
+    return true;
+  } catch(e) {
+    print('error occurred on generating back up of ${targetFile.path} ($e)');
+    return false;
+  }
 }
 
 Future<List<String>> backupTargetDirList(drive.DriveApi? driveApi) async {
-  List<String> result = [];
+  try {
+    List<String> result = [];
 
-  if (driveApi != null) {
-    final foundRootDir = await driveApi.files.list(
-      q: "mimeType = 'application/vnd.google-apps.folder' and name = 'Simple Planner Backups' and trashed = false",
-      $fields: "files(id, name)",
-    );
+    if (driveApi != null) {
+      final foundRootDir = await driveApi.files.list(
+        q: "mimeType = 'application/vnd.google-apps.folder' and name = 'Simple Planner Backups' and trashed = false",
+        $fields: "files(id, name)",
+      );
 
-    String rootDirID = foundRootDir.files!.first.id!;
+      String rootDirID = foundRootDir.files!.first.id!;
 
-    final foundTargetDir = await driveApi.files.list(
-      spaces: 'drive',
-      q: "'$rootDirID' in parents and trashed = false",
-    );
+      final foundTargetDir = await driveApi.files.list(
+        spaces: 'drive',
+        q: "'$rootDirID' in parents and trashed = false",
+      );
 
-    for (drive.File targetDirFile in foundTargetDir.files!) {
-      result.add(targetDirFile.name!);
+      for (drive.File targetDirFile in foundTargetDir.files!) {
+        result.add(targetDirFile.name!);
+      }
+
+      result.sort((a, b) => b.compareTo(a));
     }
 
-    result.sort((a, b) => b.compareTo(a));
+    return result;
+  } catch (e) {
+    print('error occurred on generating list of backups ($e)');
+    return [];
   }
-
-  return result;
 }
 
 Future<bool> restoreAllFiles(drive.DriveApi? driveApi, String targetDirName, GoogleAuthClient? authenticateClient) async {
-  if (driveApi != null) {
-    final foundTargetDirFiles = await driveApi.files.list(
-      q: "mimeType = 'application/vnd.google-apps.folder' and name = '$targetDirName' and trashed = false",
-      $fields: "files(id, name)",
-    );
+  try {
+    if (driveApi != null) {
+      final foundTargetDirFiles = await driveApi.files.list(
+        q: "mimeType = 'application/vnd.google-apps.folder' and name = '$targetDirName' and trashed = false",
+        $fields: "files(id, name)",
+      );
 
-    String targetDirID = foundTargetDirFiles.files!.first.id!;
+      String targetDirID = foundTargetDirFiles.files!.first.id!;
 
-    final foundScheduleDirFiles = await driveApi.files.list(
-      spaces: 'drive',
-      q: "'$targetDirID' in parents and trashed = false and name = 'Schedules'",
-    );
+      final foundScheduleDirFiles = await driveApi.files.list(
+        spaces: 'drive',
+        q: "'$targetDirID' in parents and trashed = false and name = 'Schedules'",
+      );
 
-    // Reading schedule files
-    String scheduleDirID = foundScheduleDirFiles.files!.first.id!;
+      // Reading schedule files
+      String scheduleDirID = foundScheduleDirFiles.files!.first.id!;
 
-    final foundScheduleFiles = await driveApi.files.list(
-      spaces: 'drive',
-      q: "'$scheduleDirID' in parents and trashed = false",
-    );
+      final foundScheduleFiles = await driveApi.files.list(
+        spaces: 'drive',
+        q: "'$scheduleDirID' in parents and trashed = false",
+      );
 
-    for (drive.File targetScheduleDriveFile in foundScheduleFiles.files!) {
-      String readScheduleContent = await downloadRequest(targetScheduleDriveFile.id!, authenticateClient);
-      String targetScheduleFileName = targetScheduleDriveFile.name!;
-      File targetScheduleFile = await scheduleFile(getDateFromFilepath(targetScheduleFileName));
-      targetScheduleFile.writeAsString(readScheduleContent, encoding: utf8);
+      for (drive.File targetScheduleDriveFile in foundScheduleFiles.files!) {
+        String readScheduleContent = await downloadRequest(targetScheduleDriveFile.id!, authenticateClient);
+        String targetScheduleFileName = targetScheduleDriveFile.name!;
+        File targetScheduleFile = await scheduleFile(getDateFromFilepath(targetScheduleFileName));
+        targetScheduleFile.writeAsString(readScheduleContent, encoding: utf8);
+      }
+
+      // Reading tasks file
+      final foundTaskFiles = await driveApi.files.list(spaces: 'drive', q: "'$targetDirID' in parents and trashed = false and name = 'tasks.csv'",);
+      String taskFilesID = foundTaskFiles.files!.first.id!;
+      String readTaskContent = await downloadRequest(taskFilesID, authenticateClient);
+      File targetTaskFile = await taskFile();
+      targetTaskFile.writeAsString(readTaskContent, encoding: utf8);
+
+      // Reading notification file
+      final foundNotificationFile = await driveApi.files.list(spaces: 'drive', q: "'$targetDirID' in parents and trashed = false and name = 'notifications.csv'",);
+      String notificationFileID = foundNotificationFile.files!.first.id!;
+      String readNotificationContent = await downloadRequest(notificationFileID, authenticateClient);
+      File targetNotificationFile = await notificationFile();
+      targetNotificationFile.writeAsString(readNotificationContent, encoding: utf8);
+
+      // Reading monthly routine file
+      final foundMonthlyRoutineFile = await driveApi.files.list(spaces: 'drive', q: "'$targetDirID' in parents and trashed = false and name = 'monthly_routines.csv'",);
+      String monthlyRoutineFilesID = foundMonthlyRoutineFile.files!.first.id!;
+      String readMonthlyRoutineContent = await downloadRequest(monthlyRoutineFilesID, authenticateClient);
+      File targetMonthlyRoutineFile = await monthlyRoutineFile();
+      targetMonthlyRoutineFile.writeAsString(readMonthlyRoutineContent, encoding: utf8);
+
+      // Reading weekly routine file
+      final foundWeeklyRoutineFile = await driveApi.files.list(spaces: 'drive', q: "'$targetDirID' in parents and trashed = false and name = 'weekly_routines.csv'",);
+      String weeklyRoutineFilesID = foundWeeklyRoutineFile.files!.first.id!;
+      String readWeeklyRoutineContent = await downloadRequest(weeklyRoutineFilesID, authenticateClient);
+      File targetWeeklyRoutineFile = await weeklyRoutineFile();
+      targetWeeklyRoutineFile.writeAsString(readWeeklyRoutineContent, encoding: utf8);
     }
 
-    // Reading tasks file
-    final foundTaskFiles = await driveApi.files.list(spaces: 'drive', q: "'$targetDirID' in parents and trashed = false and name = 'tasks.csv'",);
-    String taskFilesID = foundTaskFiles.files!.first.id!;
-    String readTaskContent = await downloadRequest(taskFilesID, authenticateClient);
-    File targetTaskFile = await taskFile();
-    targetTaskFile.writeAsString(readTaskContent, encoding: utf8);
-
-    // Reading notification file
-    final foundNotificationFile = await driveApi.files.list(spaces: 'drive', q: "'$targetDirID' in parents and trashed = false and name = 'notifications.csv'",);
-    String notificationFileID = foundNotificationFile.files!.first.id!;
-    String readNotificationContent = await downloadRequest(notificationFileID, authenticateClient);
-    File targetNotificationFile = await notificationFile();
-    targetNotificationFile.writeAsString(readNotificationContent, encoding: utf8);
-
-    // Reading monthly routine file
-    final foundMonthlyRoutineFile = await driveApi.files.list(spaces: 'drive', q: "'$targetDirID' in parents and trashed = false and name = 'monthly_routines.csv'",);
-    String monthlyRoutineFilesID = foundMonthlyRoutineFile.files!.first.id!;
-    String readMonthlyRoutineContent = await downloadRequest(monthlyRoutineFilesID, authenticateClient);
-    File targetMonthlyRoutineFile = await monthlyRoutineFile();
-    targetMonthlyRoutineFile.writeAsString(readMonthlyRoutineContent, encoding: utf8);
-
-    // Reading weekly routine file
-    final foundWeeklyRoutineFile = await driveApi.files.list(spaces: 'drive', q: "'$targetDirID' in parents and trashed = false and name = 'weekly_routines.csv'",);
-    String weeklyRoutineFilesID = foundWeeklyRoutineFile.files!.first.id!;
-    String readWeeklyRoutineContent = await downloadRequest(weeklyRoutineFilesID, authenticateClient);
-    File targetWeeklyRoutineFile = await weeklyRoutineFile();
-    targetWeeklyRoutineFile.writeAsString(readWeeklyRoutineContent, encoding: utf8);
+    return true;
+  } catch(e) {
+    print('restoration error occurred ($e)');
+    return false;
   }
-
-  return true;
 }
 
 Future<String> downloadRequest(String fileID, GoogleAuthClient? authenticateClient) async {
-  if (authenticateClient != null) {
-    http.Response req = await authenticateClient.get(Uri.parse("https://www.googleapis.com/drive/v3/files/$fileID?alt=media"),);
-
-    print('======= $fileID: ${utf8.decode(req.bodyBytes)}');
-
-    return utf8.decode(req.bodyBytes);
+  try {
+    if (authenticateClient != null) {
+      http.Response req = await authenticateClient.get(Uri.parse("https://www.googleapis.com/drive/v3/files/$fileID?alt=media"),);
+      print('======= $fileID: ${utf8.decode(req.bodyBytes)}');
+      return utf8.decode(req.bodyBytes);
+    }
+    return '';
+  } catch(e) {
+    print('download request on file ($fileID) failed ($e)');
+    return '';
   }
-  return '';
 }
