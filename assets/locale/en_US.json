@@ -91,5 +91,10 @@
   "radix3": "rd",
   "radix4": "th",
 
-  "rebuild_language_pack_msg": "Restart applicaiton to load new language pack"
+  "rebuild_language_pack_msg": "Restart applicaiton to load new language pack",
+  "backup_start_msg": "Starting backup to your google drive",
+  "backup_complete_msg": "Backup complete",
+  "restore_preparation_msg": "Generating list of saved backup directories",
+  "restore_start_msg": "Starting to restore data from your google drive",
+  "restore_complete_msg": "Restoring complete"
 }

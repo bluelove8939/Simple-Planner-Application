@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "647532544829",
+    "project_id": "simple-planner-backups",
+    "storage_bucket": "simple-planner-backups.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:647532544829:android:9fb597af1f813cf83ffb54",
+        "android_client_info": {
+          "package_name": "com.bluelove8939.simpleplanner"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "647532544829-egupgutf4h0vh3f4lbg4j4g36o7v9snc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bluelove8939.simpleplanner",
+            "certificate_hash": "4b99b489913af30a025095257cf761b20cc5346f"
+          }
+        },
+        {
+          "client_id": "647532544829-9m38q17gls5ks6ps2f0bchljkojc98ll.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC1EpC0YdsJee8OO5b2vi0CkLZLQ1bPnw8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "647532544829-9m38q17gls5ks6ps2f0bchljkojc98ll.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:dotted_border/dotted_border.dart';
+import 'package:googleapis/drive/v3.dart' as drive;
+import 'package:google_sign_in/google_sign_in.dart' as sign_in;
+
 import 'package:simpleplanner/appdata_manager.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -19,6 +22,10 @@ List<List> notificationContents = [];
 
 // Other global variables
 DateTime addScheduleInitialDate = DateTime.now();
+sign_in.GoogleSignInAccount? account;  // User login account
+Map<String, String>? authHeaders;
+GoogleAuthClient? authenticateClient;
+drive.DriveApi? driveApi;
 
 // Constants
 List<String> weekdays = weekdayNames[applicationSettings['generalLocale']]!;
@@ -39,6 +46,24 @@ void saveAllFiles() {
   saveSettingFile(applicationSettings);
 }
 
+Future<sign_in.GoogleSignInAccount?> loginActivation() async {
+  if (account == null || applicationSettings['loginInitialized'] == 'false') {
+    final googleSignIn = sign_in.GoogleSignIn.standard(scopes: [drive.DriveApi.driveScope]);
+    sign_in.GoogleSignInAccount? targetAccount = await googleSignIn.signIn();
+    applicationSettings['loginInitialized'] = "true";
+    authHeaders = await targetAccount!.authHeaders;
+    authenticateClient = GoogleAuthClient(authHeaders!);
+    driveApi = drive.DriveApi(authenticateClient!);
+
+    return targetAccount;
+  }
+
+  authHeaders = await account!.authHeaders;
+  authenticateClient = GoogleAuthClient(authHeaders!);
+  driveApi = drive.DriveApi(authenticateClient!);
+  return account;
+}
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,8 +74,13 @@ void main() async {
   monthlyRoutineContents = await readMonthlyRoutineFile();
   weeklyRoutineContents = await readWeeklyRoutineFile();
   languagePack = await readLanguagePackFile(applicationSettings['generalLocale'] ?? defaultApplicationSettings['generalLocale']!);
+  if (applicationSettings['loginInitialized'] == 'true') {
+    account = await loginActivation();
+  }
 
+  print('===== $scheduleContents');
   print('===== $weeklyRoutineContents');
+  print('===== $applicationSettings');
 
   runApp(const MyApp());
 }
@@ -2032,7 +2062,7 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
                           selectedIndex = index;
                           isAddNewRoutineMode = false;
                           routineNameController.text = dirtyRoutineContents[index][0];
-                          selectedWeekday = dirtyRoutineContents[index][1];
+                          selectedWeekday = weekdays[int.parse(dirtyRoutineContents[index][1])];
                           FocusScope.of(context).unfocus();
                         } else if (!isAddNewRoutineMode && selectedIndex == index) {
                           selectedIndex = -1;
@@ -2043,7 +2073,7 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
                         } else if (!isAddNewRoutineMode && selectedIndex != index) {
                           selectedIndex = index;
                           routineNameController.text = dirtyRoutineContents[index][0];
-                          selectedWeekday = dirtyRoutineContents[index][1];
+                          selectedWeekday = weekdays[int.parse(dirtyRoutineContents[index][1])];
                           FocusScope.of(context).unfocus();
                         }
                       }); },
@@ -2067,7 +2097,7 @@ class _AddWeeklyRoutineModeState extends State<AddWeeklyRoutineMode> {
                               child: Container(
                                 width: double.infinity,
                                 alignment: Alignment.centerRight,
-                                child: Text('${weekdays[int.parse(dirtyRoutineContents[index][1])]}', style: TextStyle(
+                                child: Text(weekdays[int.parse(dirtyRoutineContents[index][1])], style: TextStyle(
                                   fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey,
                                 ),),
                               ),
@@ -2101,6 +2131,7 @@ class SettingMode extends StatefulWidget {
 
 class _SettingModeState extends State<SettingMode> {
   bool isBackKeyActivated = true;
+  bool isSettingActivated = true;
   int selectedIndex = -1;
 
   void refresh() {
@@ -2150,6 +2181,29 @@ class _SettingModeState extends State<SettingMode> {
               physics: BouncingScrollPhysics(),
               children: [
                 ListTile(
+                  leading: Icon(Icons.login_outlined),
+                  title: Row(
+                    children: [
+                      Text('Login', style: TextStyle(fontSize: 16)),
+                      Expanded(
+                        child: Container(
+                          width: double.infinity,
+                          alignment: Alignment.centerRight,
+                          child: Text(applicationSettings['loginInitialized'] == 'false' ? 'not authenticated' : account!.email.toString(), style: TextStyle(fontSize: 16, color: Colors.amber[800])),
+                        ),
+                      )
+                    ],
+                  ),
+                  onTap: () async {
+                    if (isSettingActivated) {
+                      if (account == null) {
+                        account = await loginActivation();
+                        setState(() {});
+                      }
+                    }
+                  },
+                ),
+                ListTile(
                   leading: Icon(Icons.language_outlined),
                   title: Row(
                     children: [
@@ -2163,7 +2217,96 @@ class _SettingModeState extends State<SettingMode> {
                       )
                     ],
                   ),
-                  onTap: () { openSettingLauguageMode(); },
+                  onTap: () {if (isSettingActivated) { openSettingLauguageMode(); }},
+                ),
+                ListTile(
+                  leading: Icon(Icons.backup_outlined),
+                  title: Text('Backup', style: TextStyle(fontSize: 16)),
+                  onTap: () async {
+                    if (isSettingActivated) {
+                      isBackKeyActivated = false;
+                      isSettingActivated = false;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(languagePack['backup_start_msg'] ?? "backup start"), duration: Duration(seconds: 2),),
+                      );
+
+                      bool backupResult = await backupAllFiles(driveApi);
+                      print(backupResult);
+                      setState(() {});
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(languagePack['backup_complete_msg'] ?? "backup complete"), duration: Duration(seconds: 2),),
+                      );
+
+                      isBackKeyActivated = true;
+                      isSettingActivated = true;
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.restore),
+                  title: Text('Restore', style: TextStyle(fontSize: 16)),
+                  onTap: () async {
+                    if (isSettingActivated) {
+                      isBackKeyActivated = false;
+                      isSettingActivated = false;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(languagePack['restore_preparation_msg'] ?? "restore preparation"), duration: Duration(seconds: 2),),
+                      );
+
+                      String selectedTargetDirName = "not selected";
+                      List<String> backupTargetDirNames = await backupTargetDirList(driveApi);
+
+                      await showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            title: Text("Select backup directory"),
+                            content: SizedBox(
+                              width: MediaQuery.of(context).size.height - 50,
+                              height: MediaQuery.of(context).size.height,
+                              child: ListView.builder(
+                                itemCount: backupTargetDirNames.length,
+                                itemBuilder: (context, index) {
+                                  return ListTile(
+                                    leading: Icon(Icons.folder),
+                                    title: Text(backupTargetDirNames[index]),
+                                    onTap: () {
+                                      selectedTargetDirName = backupTargetDirNames[index];
+                                      Navigator.pop(context);
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      );
+
+                      if (selectedTargetDirName != 'not selected') {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(languagePack['restore_start_msg'] ?? "restore start"), duration: Duration(seconds: 2),),
+                        );
+
+                        await restoreAllFiles(driveApi, selectedTargetDirName, authenticateClient);
+
+                        scheduleContents = await readAllScheduleFiles();
+                        taskContents = await readTaskFile();
+                        notificationContents = await readNotificationFile();
+                        monthlyRoutineContents = await readMonthlyRoutineFile();
+                        weeklyRoutineContents = await readWeeklyRoutineFile();
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(languagePack['restore_complete_msg'] ?? "restore start"), duration: Duration(seconds: 2),),
+                        );
+                      }
+
+                      isBackKeyActivated = true;
+                      isSettingActivated = true;
+                    }
+                  },
                 ),
               ],
             ),

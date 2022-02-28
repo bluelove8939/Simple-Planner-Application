@@ -91,5 +91,10 @@
   "radix3": "일",
   "radix4": "일",
 
-  "rebuild_language_pack_msg": "새로운 언어를 적용하기 위해서는 어플리케이션을 재시작하세요"
+  "rebuild_language_pack_msg": "새로운 언어를 적용하기 위해서는 어플리케이션을 재시작하세요",
+  "backup_start_msg": "구글 드라이브에 데이터를 백업합니다",
+  "backup_complete_msg": "백업이 완료되었습니다",
+  "restore_preparation_msg": "저장된 백업 디렉토리 리스트를 읽는 중입니다",
+  "restore_start_msg": "구글 드라이브에 저장된 데이터를 복원합니다",
+  "restore_complete_msg": "복원이 완료되었습니다"
 }

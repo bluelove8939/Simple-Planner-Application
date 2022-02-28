@@ -37,6 +37,9 @@ dependencies:
   filesystem_picker: ^2.0.0
   permission_handler: ^9.1.0
   dotted_border: ^2.0.0
+  googleapis_auth: any
+  googleapis: any
+  google_sign_in: any
 
 
   # The following adds the Cupertino Icons font to your application.
