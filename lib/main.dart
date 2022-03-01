@@ -2356,6 +2356,10 @@ class _SettingModeState extends State<SettingMode> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text(languagePack['restore_preparation_fail_msg'] ?? "restore_preparation_fail_msg"), duration: Duration(seconds: 2),),
                         );
+
+                        isBackKeyActivated = true;
+                        isSettingActivated = true;
+
                         return;
                       }
 
@@ -2845,13 +2849,12 @@ class _DailyScheduleModeState extends State<DailyScheduleMode> {
             accountName: Text(account != null && applicationSettings['loginInitialized'] == 'true' ? account!.displayName.toString() : 'User name'),
             accountEmail: Text(account != null && applicationSettings['loginInitialized'] == 'true' ? account!.email : 'emailaccount@google.com'),
             currentAccountPicture: CircleAvatar(
+              backgroundColor: Colors.yellow[800],
               child: ClipOval(
                 child: account != null && applicationSettings['loginInitialized'] == 'true' ? Image.network(
                   account!.photoUrl.toString(),
-                  fit: BoxFit.cover,
-                  width: 90,
-                  height: 90,
-                ) : Icon(Icons.person),
+                  fit: BoxFit.cover, width: 90, height: 90,
+                ) : Icon(Icons.person, size: 40, color: Colors.black),
               ),
             ),
             decoration: BoxDecoration(
