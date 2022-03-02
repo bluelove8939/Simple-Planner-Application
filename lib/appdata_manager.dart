@@ -73,7 +73,7 @@ String dateTime2StringWithoutWeekday(DateTime targetDate) {
 }
 
 String addWeekday2String(String targetString) {
-  return dateTime2String(DateTime.parse(targetString));
+  return dateTime2String(DateTime.parse(removeWeekday2String(targetString)));
 }
 
 String removeWeekday2String(String targetString) {
